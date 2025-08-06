@@ -8,6 +8,20 @@
       "when": 1754410302146,
       "tag": "0000_safe_mad_thinker",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1754458364080,
+      "tag": "0001_nappy_toro",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1754458623938,
+      "tag": "0002_chubby_talkback",
+      "breakpoints": true
     }
   ]
 }

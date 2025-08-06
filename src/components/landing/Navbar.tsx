@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Shield, Menu, X, Wallet, User } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import GoogleLogin from "../GoogleLogin";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -68,13 +69,7 @@ const Navbar = () => {
           {/* Auth Buttons */}
           <div className="hidden md:flex items-center space-x-4">
             {!isLoggedIn ? (
-              <button
-                onClick={handleZkLogin}
-                className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600 text-white font-medium hover:from-blue-600 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
-              >
-                <User className="h-4 w-4 inline mr-2" />
-                ZkLogin
-              </button>
+              <GoogleLogin />
             ) : (
               <div className="flex items-center space-x-3">
                 {!isConnected ? (

@@ -9,12 +9,12 @@ const timestamps = {
 export const roleEnum = pgEnum('role', ['admin', 'user', 'issuer'])
 export const users = pgTable("users", {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    pubKey: text().unique(),
-    email: varchar({ length: 255 }).notNull().unique(),
-    username: varchar({ length: 255 }).notNull(),
+    userAddress: text().unique().notNull(),
+    email: varchar({ length: 255 }).unique(),
+    username: varchar({ length: 255 }),
     isIssuer: boolean().default(false),
-    role: roleEnum(),
-    createdAt: timestamp("created_at").defaultNow(),
+    role: roleEnum().default("user"),
+    ...timestamps
 
 });
 
