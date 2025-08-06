@@ -34,7 +34,7 @@ export default function Page() {
         jwt
       );
       console.log(payload.email);
-      const nonce = payload.nonce;
+      // const nonce = payload.nonce;
       // grab the ephemeralKeyPair
       const keyPairs = localStorage.getItem("ephemeral-key-pair");
       if (!keyPairs) {
@@ -132,7 +132,7 @@ export default function Page() {
       }
     }
     auth();
-  }, []);
+  }, [router]);
   return <div></div>;
 }
 export type PartialZkLoginSignature = Omit<

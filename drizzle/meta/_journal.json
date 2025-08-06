@@ -22,6 +22,34 @@
       "when": 1754458623938,
       "tag": "0002_chubby_talkback",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1754495087598,
+      "tag": "0003_regular_warhawk",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1754495309310,
+      "tag": "0004_nervous_exiles",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1754497123841,
+      "tag": "0005_dizzy_drax",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1754499094139,
+      "tag": "0006_tan_korg",
+      "breakpoints": true
     }
   ]
 }

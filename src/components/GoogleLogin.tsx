@@ -6,6 +6,7 @@ import { getSuiClient } from "@/utils/suiClient";
 import { useRouter } from "next/navigation";
 import { User } from "lucide-react";
 import { storeEphemeralKeyPair } from "@/hooks/useEphemeralKeyPair";
+import { env } from "@/lib/env/client";
 export default function GoogleLogin() {
   const router = useRouter();
   async function generateUrl() {
@@ -19,7 +20,7 @@ export default function GoogleLogin() {
       maxEpoch,
       randomness
     );
-    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    const clientId = env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
     if (!clientId) throw new Error("Google client Id missing");
     const redirectUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     const searchParams = new URLSearchParams({

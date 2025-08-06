@@ -3,9 +3,13 @@ import { z } from "zod";
 
 export const env = createEnv({
     client: {
-        NEXT_PUBLIC_DNS_KEY: z.string().min(1),
+        NEXT_PUBLIC_TXT_KEY: z.string().min(1),
+        NEXT_PUBLIC_ENOKI_KEY: z.string().min(1),
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: z.string().min(1),
     },
     runtimeEnv: {
-        NEXT_PUBLIC_DNS_KEY: process.env.NEXT_PUBLIC_DNS_KEY,
+        NEXT_PUBLIC_TXT_KEY: process.env.NEXT_PUBLIC_TXT_KEY,
+        NEXT_PUBLIC_ENOKI_KEY: process.env.NEXT_PUBLIC_ENOKI_KEY,
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
     },
 });

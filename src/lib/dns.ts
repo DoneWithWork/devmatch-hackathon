@@ -1,4 +1,7 @@
-import dns from "node:dns/promises"
+import { Resolver } from "node:dns/promises";
+
+const customResolver = new Resolver();
+customResolver.setServers(['8.8.8.8']);
 
 type TXTRecordProps = {
     domain: string;
@@ -7,9 +10,10 @@ type TXTRecordProps = {
 }
 export async function checkTXTRecord({ domain, matchingKey, matchingValue }: TXTRecordProps): Promise<boolean> {
     try {
-        const records = await dns.resolveTxt(domain);
+        const records = await customResolver.resolveTxt(domain);
         for (const recordChunks of records) {
             const record = recordChunks.join('');
+            console.log(record)
             const [key, value] = record.split('=')
             if (key === matchingKey && matchingValue === value) return true;
         }

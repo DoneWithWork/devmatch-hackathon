@@ -1,4 +1,4 @@
-import { getSession, SessionData } from "@/utils/session";
+import { getSession } from "@/utils/session";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 

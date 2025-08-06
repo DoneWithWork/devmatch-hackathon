@@ -19,15 +19,17 @@ export async function POST(request: NextRequest) {
     })
     if (!user) {
         const newUser = await db.insert(users).values({
-            userAddress
-        }).returning({ userAddress: users.userAddress })
+            userAddress,
+
+        }).returning({ userAddress: users.userAddress, userId: users.id })
         if (!newUser) return NextResponse.json({ message: "Failed to create a new user" }, {
             status: 500
         })
-        await SaveSession({ cookies: curCookies, id: newUser[0].userAddress, maxEpoch, randomness, userAddress })
+        await SaveSession({ cookies: curCookies, id: newUser[0].userId, maxEpoch, randomness, userAddress, role: "user" })
 
+    } else {
+        await SaveSession({ cookies: curCookies, id: user.id, maxEpoch, randomness, userAddress, role: user.role! })
     }
-    await SaveSession({ cookies: curCookies, id: user?.userAddress!, maxEpoch, randomness, userAddress })
 
     return NextResponse.json({ message: "Successfully saved the session!" }, {
         status: 200

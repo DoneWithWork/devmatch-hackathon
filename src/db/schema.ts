@@ -7,6 +7,8 @@ const timestamps = {
     deleted_at: timestamp(),
 }
 export const roleEnum = pgEnum('role', ['admin', 'user', 'issuer'])
+export const applicationStatus = pgEnum('applicationStatus', ['pending', 'success', 'rejected']);
+export const institutionEnum = pgEnum('institution', ['university', 'college', 'school', 'online_center', 'gov_agency', 'research_institute', 'training_provider', 'non_profie'])
 export const users = pgTable("users", {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
     userAddress: text().unique().notNull(),
@@ -17,26 +19,38 @@ export const users = pgTable("users", {
     ...timestamps
 
 });
-
+export const issuerDocuments = pgTable("documents", {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    publicUrl: text().notNull(),
+    key: text().notNull(),
+    userId: integer("user_id").references(() => users.id).notNull(),
+    issuerApplicationId: integer().references(() => issuerApplication.id)
+})
 export const issuers = pgTable("issuers", {
     id: uuid("id").primaryKey().defaultRandom(),
-    issuerKey: text("issuer_key").unique().notNull(), // blockchain address
+    issuerKey: text("issuer_key").unique().notNull(),
     name: text("name").notNull(),
     userId: integer("user_id").references(() => users.id).notNull(),
     createdAt: timestamp("created_at").defaultNow(),
 });
-
-export const usersRelations = relations(users, ({ one }) => ({
-    issuer: one(issuers)
+export const issuerDocumentsRelations = relations(issuerDocuments, ({ one }) => ({
+    user: one(users, { fields: [issuerDocuments.userId], references: [users.id] }),
+    issuerApplication: one(issuerApplication, { fields: [issuerDocuments.issuerApplicationId], references: [issuerApplication.id] })
+}))
+export const usersRelations = relations(users, ({ one, many }) => ({
+    issuer: one(issuers),
+    issuerDocuments: many(issuerDocuments)
 }))
 export const issuersRelations = relations(issuers, ({ one }) => ({
     user: one(users, { fields: [issuers.userId], references: [users.id] })
 }))
 
-
 export const issuerApplication = pgTable("application", {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    userId: integer("user_id").references(() => users.id)
+    applicant: integer("user_id").references(() => users.id),
+    domain: text().notNull().unique(),
+    institution: institutionEnum().default("university"),
+    status: applicationStatus().default("pending")
 })
 
 

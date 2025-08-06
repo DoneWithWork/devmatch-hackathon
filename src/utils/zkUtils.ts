@@ -1,3 +1,5 @@
+import { env } from "@/lib/env/client";
+
 interface GetSaltResponseType {
     data: {
         salt: string;
@@ -10,7 +12,7 @@ export async function GetSalt(jwt: string) {
     const res = await fetch("https://api.enoki.mystenlabs.com/v1/zklogin", {
         headers: {
             "zklogin-jwt": jwt,
-            "Authorization": `Bearer ${process.env.NEXT_PUBLIC_ENOKI_KEY!}`
+            "Authorization": `Bearer ${env.NEXT_PUBLIC_ENOKI_KEY}`
         },
     });
     if (!res.ok) throw new Error("Zk Login service failed!!")
@@ -51,7 +53,7 @@ export async function GenerateZkLogin(
     const res = await fetch("https://api.enoki.mystenlabs.com/v1/zklogin/zkp", {
         headers: {
             "zklogin-jwt": jwt,
-            "Authorization": `Bearer ${process.env.NEXT_PUBLIC_ENOKI_KEY!}`,
+            "Authorization": `Bearer ${env.NEXT_PUBLIC_ENOKI_KEY}`,
             "Content-Type": "application/json"
 
         },
