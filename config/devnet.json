@@ -1,0 +1,10 @@
+{
+  "packageId": "0x6619eb84b1c9cc4ae9285c96369e446d52f71ccd1236cf9eca0e36695cb660fc",
+  "adminCap": "0x0ac7ffb970b503edfc27e621c5d5ad846009b42628a95fdbd1373dbf84f3e7be",
+  "issuerRegistry": "0x584b3f9b2d7f4a3d2aecb4df81ce921b9b026453bf32b6f78bf504486c95aee4",
+  "certificateRegistry": "0xbfd070c87c52e27c8696587136edf045709ea42ca7b77224b95e2b29021b3939",
+  "issuerCapForNFT": "0xfef70ea1e433ba1c961687628b7dbd3e83bd9e7656dcb08e8e4bf59cb102e323",
+  "displayObject": "0x8e48a55b53215471c0264b09b35a0413b75433b1992ca08b5195f198d9eb1e10",
+  "network": "devnet",
+  "rpcUrl": "https://fullnode.devnet.sui.io:443"
+}
