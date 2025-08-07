@@ -9,7 +9,8 @@
     "lint": "next lint",
     "db:migrate": "drizzle-kit migrate",
     "db:generate": "drizzle-kit generate",
-    "gas-demo": "npx tsx scripts/gas-typescript-demo.ts"
+    "gas-demo": "npx tsx scripts/gas-typescript-demo.ts",
+    "issue-certificate": "npx tsx sui/contracts/scripts/issue.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.1",

@@ -1,4 +1,12 @@
-# Gas Optimization Settings for Sui DevNet
+# Gas Optimization Settings fo## Cost Comparison - REAL TESTED VALUES
+
+| Operation       | Old Cost | Optimized | Real Usage | Savings      |
+| --------------- | -------- | --------- | ---------- | ------------ | ----- |
+| NFT Mint        | 10M MIST | 3.5M MIST | 3.05M MIST | **69.5%** ✅ |
+| Issuer Apply    | 10M MIST | 3.5M MIST | 3.06M MIST | **69.4%** ✅ |
+| Issuer Approve  | 10M MIST | 3.5M MIST | 1.12M MIST | **88.8%** ✅ |
+| Template Create | 10M MIST | 8M MIST   | 4.33M MIST | **56.7%** ✅ |
+| Certificate     | 10M MIST | 6M MIST   | ~5M MIST   | **50%**      | evNet |
 
 ## 💡 Two-Layer Optimization Strategy
 
