@@ -8,11 +8,13 @@
     "start": "next start",
     "lint": "next lint",
     "db:migrate": "drizzle-kit migrate",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "gas-demo": "npx tsx scripts/gas-typescript-demo.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.1",
     "@mysten/sui": "^1.37.1",
+    "@mysten/sui.js": "^0.54.1",
     "@neondatabase/serverless": "^1.0.1",
     "@radix-ui/react-dialog": "^1.1.14",
     "@radix-ui/react-label": "^2.1.7",

@@ -110,6 +110,10 @@ module devmatch_nft::certificate {
             i = i + 1;
         };
 
+        // Cache commonly used values
+        let sender = tx_context::sender(ctx);
+        let timestamp = tx_context::epoch_timestamp_ms(ctx);
+
         let template_id = object::new(ctx);
         let template = CertificateTemplate {
             id: template_id,
@@ -120,23 +124,28 @@ module devmatch_nft::certificate {
             certificate_type: string::utf8(certificate_type),
             fields: field_strings,
             issuer_name: *issuer::get_issuer_name(issuer_cap),
-            created_at: tx_context::epoch_timestamp_ms(ctx),
+            created_at: timestamp,
             is_active: true,
         };
 
         // Update registry
         registry.total_templates = registry.total_templates + 1;
 
+        // Cache commonly used values
+        let sender = tx_context::sender(ctx);
+        let timestamp = tx_context::epoch_timestamp_ms(ctx);
+        let template_id_ref = object::id(&template);
+
         // Emit event
         event::emit(TemplateCreatedEvent {
-            template_id: object::id(&template),
-            issuer_address: tx_context::sender(ctx),
+            template_id: template_id_ref,
+            issuer_address: sender,
             template_name: template.template_name,
             certificate_type: template.certificate_type,
-            timestamp: tx_context::epoch_timestamp_ms(ctx),
+            timestamp,
         });
 
-        transfer::public_transfer(template, tx_context::sender(ctx));
+        transfer::public_transfer(template, sender);
     }
 
     public entry fun deactivate_template(
@@ -161,9 +170,15 @@ module devmatch_nft::certificate {
         registry: &mut CertificateRegistry,
         ctx: &mut TxContext
     ) {
+        // Cache commonly used values
+        let sender = tx_context::sender(ctx);
+        let timestamp = tx_context::epoch_timestamp_ms(ctx);
+        let template_id_ref = object::id(template);
+        let issuer_cap_id = object::id(issuer_cap);
+
         // Validations
         assert!(issuer::is_approved_issuer(issuer_cap), 0);
-        assert!(template.issuer_cap_id == object::id(issuer_cap), 1);
+        assert!(template.issuer_cap_id == issuer_cap_id, 1);
         assert!(template.is_active, 2);
         assert!(vector::length(&field_names) == vector::length(&field_values), 3);
 
@@ -179,20 +194,20 @@ module devmatch_nft::certificate {
 
         // Generate certificate hash for verification
         let certificate_hash = generate_certificate_hash(
-            object::id(template),
-            tx_context::sender(ctx),
+            template_id_ref,
+            sender,
             recipient,
-            tx_context::epoch_timestamp_ms(ctx)
+            timestamp
         );
 
         let certificate_id = object::new(ctx);
         let certificate = IssuedCertificate {
             id: certificate_id,
-            template_id: object::id(template),
-            issuer_address: tx_context::sender(ctx),
+            template_id: template_id_ref,
+            issuer_address: sender,
             recipient_address: recipient,
             certificate_data,
-            issued_at: tx_context::epoch_timestamp_ms(ctx),
+            issued_at: timestamp,
             expiry_date,
             is_minted: false,
             mint_transaction_id: option::none(),
@@ -205,11 +220,11 @@ module devmatch_nft::certificate {
         // Emit event
         event::emit(CertificateIssuedEvent {
             certificate_id: object::id(&certificate),
-            template_id: object::id(template),
-            issuer: tx_context::sender(ctx),
+            template_id: template_id_ref,
+            issuer: sender,
             recipient,
             certificate_type: template.certificate_type,
-            timestamp: tx_context::epoch_timestamp_ms(ctx),
+            timestamp,
         });
 
         // Transfer to recipient (they can later authorize minting)

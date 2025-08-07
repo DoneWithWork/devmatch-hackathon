@@ -79,6 +79,25 @@ module devmatch_nft::simple_nft {
         transfer::public_transfer(nft, recipient);
     }
 
+    /// Gas-optimized minting without issuer check (for sponsored transactions)
+    public entry fun mint_nft_optimized(
+        name: vector<u8>,
+        description: vector<u8>,
+        image_url: vector<u8>,
+        recipient: address,
+        ctx: &mut TxContext
+    ) {
+        // Minimal operations for lowest gas cost
+        let nft = SimpleNFT {
+            id: object::new(ctx),
+            name: string::utf8(name),
+            description: string::utf8(description),
+            image_url: string::utf8(image_url),
+        };
+
+        transfer::public_transfer(nft, recipient);
+    }
+
     /// Create a new issuer capability - only existing issuer can do this
     public entry fun create_issuer(
         _issuer_cap: &IssuerCap,  // Must have issuer capability
