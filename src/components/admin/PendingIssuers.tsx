@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 // Integration with your gas-optimized smart contract functions
 interface PendingIssuer {
@@ -14,13 +15,38 @@ interface PendingIssuer {
   status: "pending" | "success" | "rejected";
   appliedAt: string;
   createdAt: string;
+  issuerCapId?: string | null;
+  transactionDigest?: string | null;
+  hasBlockchainIntegration?: boolean;
 }
 
 export function PendingIssuers() {
   const [pendingIssuers, setPendingIssuers] = useState<PendingIssuer[]>([]);
+  const [activeTab, setActiveTab] = useState<
+    "all" | "pending" | "success" | "rejected"
+  >("all");
   const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>(
     {}
   );
+
+  // Load applications from API
+  useEffect(() => {
+    loadApplications();
+  }, []);
+
+  // Filter issuers based on active tab
+  const filteredIssuers = pendingIssuers.filter((issuer) => {
+    if (activeTab === "all") return true;
+    return issuer.status === activeTab;
+  });
+
+  // Count applications by status
+  const statusCounts = {
+    all: pendingIssuers.length,
+    pending: pendingIssuers.filter((i) => i.status === "pending").length,
+    success: pendingIssuers.filter((i) => i.status === "success").length,
+    rejected: pendingIssuers.filter((i) => i.status === "rejected").length,
+  };
 
   // Load applications from API
   useEffect(() => {
@@ -39,7 +65,7 @@ export function PendingIssuers() {
     }
   };
 
-  // Approve issuer using gas-optimized 3.5M MIST budget
+  // Approve issuer - updates database status
   const approveIssuer = async (issuerId: string) => {
     setLoadingStates((prev) => ({ ...prev, [issuerId]: true }));
     try {
@@ -68,9 +94,27 @@ export function PendingIssuers() {
         );
         // Reload applications to get fresh data
         await loadApplications();
+
+        // Trigger gas balance refresh by dispatching a custom event
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("refreshGasBalance"));
+        }
       } else {
-        const error = await response.text();
-        console.error("Approval failed:", error);
+        // Handle error response
+        let errorMessage = "Unknown error occurred";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+        } catch {
+          // If JSON parsing fails, try to get text
+          try {
+            errorMessage = (await response.text()) || errorMessage;
+          } catch {
+            console.error("Failed to parse error response");
+          }
+        }
+        console.error("Approval failed:", errorMessage);
+        alert(`Approval failed: ${errorMessage}`);
       }
     } catch (error) {
       console.error("Approval failed:", error);
@@ -79,83 +123,246 @@ export function PendingIssuers() {
     }
   };
 
+  // Reject issuer application
+  const rejectIssuer = async (issuerId: string) => {
+    setLoadingStates((prev) => ({ ...prev, [issuerId]: true }));
+    try {
+      // Call backend API to reject the issuer
+      const response = await fetch("/api/admin/reject-issuer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ issuerId }),
+      });
+
+      if (response.ok) {
+        // Update UI state
+        setPendingIssuers((prev) =>
+          prev.map((issuer) =>
+            issuer.id === issuerId
+              ? { ...issuer, status: "rejected" as const }
+              : issuer
+          )
+        );
+        // Reload applications to get fresh data
+        await loadApplications();
+      } else {
+        // Handle error response
+        let errorMessage = "Unknown error occurred";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+        } catch {
+          // If JSON parsing fails, try to get text
+          try {
+            errorMessage = (await response.text()) || errorMessage;
+          } catch {
+            console.error("Failed to parse error response");
+          }
+        }
+        console.error("Rejection failed:", errorMessage);
+        alert(`Rejection failed: ${errorMessage}`);
+      }
+    } catch (error) {
+      console.error("Rejection failed:", error);
+    } finally {
+      setLoadingStates((prev) => ({ ...prev, [issuerId]: false }));
+    }
+  };
+
   return (
-    <div className="space-y-4 p-6">
-      <h2 className="text-2xl font-bold">Pending Issuer Applications</h2>
+    <div className="bg-white border rounded-lg shadow-sm">
+      <div className="p-6 border-b">
+        <h2 className="text-2xl font-bold">Issuer Applications</h2>
+        <p className="text-gray-600 mt-1">
+          Review and approve issuer applications
+        </p>
 
-      {pendingIssuers.length === 0 ? (
-        <div className="text-gray-500 text-center py-8">
-          No pending applications found.
+        {/* Status Tabs */}
+        <div className="flex gap-1 mt-4 p-1 bg-gray-100 rounded-lg w-fit">
+          <button
+            onClick={() => setActiveTab("all")}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              activeTab === "all"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            All ({statusCounts.all})
+          </button>
+          <button
+            onClick={() => setActiveTab("pending")}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              activeTab === "pending"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Pending ({statusCounts.pending})
+          </button>
+          <button
+            onClick={() => setActiveTab("success")}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              activeTab === "success"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Approved ({statusCounts.success})
+          </button>
+          <button
+            onClick={() => setActiveTab("rejected")}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              activeTab === "rejected"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Rejected ({statusCounts.rejected})
+          </button>
         </div>
-      ) : (
-        pendingIssuers.map((issuer) => (
-          <div key={issuer.id} className="border rounded-lg p-6 space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="text-xl font-semibold">
-                {issuer.organizationName}
-              </h3>
-              <span
-                className={`px-3 py-1 rounded-full text-sm ${
-                  issuer.status === "pending"
-                    ? "bg-yellow-100 text-yellow-800"
-                    : issuer.status === "success"
-                    ? "bg-green-100 text-green-800"
-                    : "bg-red-100 text-red-800"
-                }`}
-              >
-                {issuer.status === "success" ? "approved" : issuer.status}
-              </span>
-            </div>
+      </div>
 
-            <div className="space-y-2 text-sm">
-              <p>
-                <strong>Contact Email:</strong> {issuer.contactEmail}
-              </p>
-              {issuer.website && (
-                <p>
-                  <strong>Website:</strong>
-                  <a
-                    href={issuer.website}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:underline ml-2"
-                  >
-                    {issuer.website}
-                  </a>
-                </p>
-              )}
-              <p>
-                <strong>Description:</strong> {issuer.description}
-              </p>
-              <p>
-                <strong>Wallet Address:</strong>{" "}
-                <code className="bg-gray-100 px-2 py-1 rounded text-xs">
-                  {issuer.walletAddress}
-                </code>
-              </p>
-              <p>
-                <strong>Applied:</strong>{" "}
-                {new Date(issuer.appliedAt).toLocaleDateString()}
-              </p>
-            </div>
-
-            {issuer.status === "pending" && (
-              <div className="flex gap-2 mt-4">
-                <Button
-                  onClick={() => approveIssuer(issuer.id)}
-                  disabled={loadingStates[issuer.id] || false}
-                  className="bg-green-600 hover:bg-green-700"
-                >
-                  {loadingStates[issuer.id]
-                    ? "Approving..."
-                    : "Approve (Gas: 3.5M MIST)"}
-                </Button>
-                <Button variant="destructive">Reject</Button>
-              </div>
-            )}
+      <div className="p-6">
+        {filteredIssuers.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="text-gray-400 text-6xl mb-4">📋</div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              No {activeTab === "all" ? "" : activeTab + " "}applications
+            </h3>
+            <p className="text-gray-500">
+              {activeTab === "all"
+                ? "New issuer applications will appear here for review."
+                : `No applications with ${activeTab} status found.`}
+            </p>
           </div>
-        ))
-      )}
+        ) : (
+          <div className="space-y-4">
+            {filteredIssuers.map((issuer) => (
+              <div
+                key={issuer.id}
+                className="border rounded-lg p-4 hover:bg-gray-50 transition-colors"
+              >
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-3 gap-2">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900 break-words">
+                      {issuer.organizationName}
+                    </h3>
+                    <p className="text-sm text-gray-500 break-all">
+                      {issuer.contactEmail}
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2 shrink-0">
+                    <Badge
+                      variant={
+                        issuer.status === "pending"
+                          ? "secondary"
+                          : issuer.status === "success"
+                          ? "default"
+                          : "destructive"
+                      }
+                    >
+                      {issuer.status}
+                    </Badge>
+                    {issuer.hasBlockchainIntegration && (
+                      <Badge variant="outline" className="text-xs">
+                        🔗 Blockchain
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 text-sm mb-4">
+                  {issuer.website && (
+                    <div className="min-w-0">
+                      <span className="font-medium text-gray-700">
+                        Website:
+                      </span>
+                      <a
+                        href={issuer.website}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline ml-2 break-all"
+                      >
+                        {issuer.website}
+                      </a>
+                    </div>
+                  )}
+                  <div>
+                    <span className="font-medium text-gray-700">Applied:</span>
+                    <span className="ml-2">
+                      {new Date(issuer.appliedAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <p className="text-sm break-words">
+                    <span className="font-medium text-gray-700">
+                      Description:
+                    </span>
+                    <span className="ml-2">{issuer.description}</span>
+                  </p>
+                </div>
+
+                <div className="mb-4">
+                  <div className="text-xs">
+                    <div className="font-medium text-gray-700 mb-1">
+                      Wallet Address:
+                    </div>
+                    <code className="bg-gray-100 px-2 py-1 rounded text-xs font-mono break-all block">
+                      {issuer.walletAddress}
+                    </code>
+                    {issuer.issuerCapId && (
+                      <div className="mt-2">
+                        <div className="font-medium text-gray-700 mb-1">
+                          IssuerCap ID:
+                        </div>
+                        <code className="bg-blue-50 px-2 py-1 rounded text-xs font-mono break-all block">
+                          {issuer.issuerCapId}
+                        </code>
+                      </div>
+                    )}
+                    {issuer.transactionDigest && (
+                      <div className="mt-2">
+                        <div className="font-medium text-gray-700 mb-1">
+                          Transaction:
+                        </div>
+                        <code className="bg-green-50 px-2 py-1 rounded text-xs font-mono break-all block">
+                          {issuer.transactionDigest}
+                        </code>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {issuer.status === "pending" && (
+                  <div className="flex gap-2 pt-3 border-t">
+                    <Button
+                      onClick={() => approveIssuer(issuer.id)}
+                      disabled={loadingStates[issuer.id] || false}
+                      className="bg-green-600 hover:bg-green-700 flex-1"
+                    >
+                      {loadingStates[issuer.id]
+                        ? "Approving..."
+                        : issuer.hasBlockchainIntegration
+                        ? "Approve on Blockchain"
+                        : "Approve (DB Only)"}
+                    </Button>
+                    <Button
+                      onClick={() => rejectIssuer(issuer.id)}
+                      disabled={loadingStates[issuer.id] || false}
+                      variant="destructive"
+                      className="flex-1"
+                    >
+                      {loadingStates[issuer.id] ? "Rejecting..." : "Reject"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

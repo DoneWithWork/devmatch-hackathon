@@ -37,6 +37,8 @@ export function IssuerApplicationForm() {
     setIsSubmitting(true);
 
     try {
+      console.log("🚀 Submitting form data:", formData);
+
       // Submit to the API
       const response = await fetch("/api/admin/applications", {
         method: "POST",
@@ -46,16 +48,26 @@ export function IssuerApplicationForm() {
         body: JSON.stringify(formData),
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to submit application");
-      }
+      console.log("📡 Response status:", response.status);
+      console.log("📡 Response ok:", response.ok);
 
       const result = await response.json();
-      console.log("Application submitted successfully:", result);
+      console.log("📡 Response data:", result);
 
+      if (!response.ok) {
+        const errorMessage = result.error || "Failed to submit application";
+        throw new Error(errorMessage);
+      }
+
+      console.log("✅ Application submitted successfully:", result);
       setSubmitted(true);
     } catch (error) {
-      console.error("Error submitting application:", error);
+      console.error("❌ Error submitting application:", error);
+      alert(
+        `Failed to submit application: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     } finally {
       setIsSubmitting(false);
     }

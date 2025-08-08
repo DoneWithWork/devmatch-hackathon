@@ -16,6 +16,8 @@ const Navbar = () => {
     { name: "Dashboard", path: "/dashboard" },
     { name: "Issue Certificate", path: "/issue" },
     { name: "Verify Certificate", path: "/verify" },
+    { name: "Apply as Issuer", path: "/apply" },
+    { name: "Admin", path: "/admin" },
   ];
 
   const handleZkLogin = () => {
