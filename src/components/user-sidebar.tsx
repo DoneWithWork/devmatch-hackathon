@@ -1,4 +1,4 @@
-import { Award } from "lucide-react";
+import { Award, Glasses } from "lucide-react";
 
 import {
   Sidebar,
@@ -9,6 +9,11 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { getSession } from "@/utils/session";
+import { cookies } from "next/headers";
+import BecomeAdmin from "./BecomeAdmin";
+import BecomeIssuerBtn from "./BecomeIssuerBtn";
+import BecomeIssuer from "./ToggleIssuerRole";
 
 // Menu items.
 const items = [
@@ -19,9 +24,11 @@ const items = [
   },
 ];
 
-export function UserSidebar() {
+export async function UserSidebar({ hasApplied }: { hasApplied: boolean }) {
+  const session = await getSession(await cookies());
+  const isIssuer = session.role === "issuer" || session.role === "admin";
   return (
-    <Sidebar>
+    <Sidebar className="glass-container">
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>
@@ -36,6 +43,19 @@ export function UserSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+              {hasApplied && (
+                <SidebarMenuItem key={"Applications"}>
+                  <SidebarMenuButton asChild>
+                    <a href={"/dashboard/issuer/applications"}>
+                      <Glasses />
+                      <span>Applications</span>
+                    </a>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+              <BecomeIssuerBtn isIssuer={isIssuer} />
+              <BecomeAdmin />
+              <BecomeIssuer />
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

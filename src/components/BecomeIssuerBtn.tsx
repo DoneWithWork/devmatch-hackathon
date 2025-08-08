@@ -22,6 +22,7 @@ import { initialState } from "@/types/types";
 import {
   Check,
   Circle,
+  CircleUser,
   Clipboard,
   ClipboardCheck,
   Loader2,
@@ -36,6 +37,8 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { OurUploadDropzone } from "./UploadDropzone";
 import { env } from "@/lib/env/client";
+import { SidebarMenuButton, SidebarMenuItem } from "./ui/sidebar";
+import Link from "next/link";
 const TXT_RECORD = `hashcred=${env.NEXT_PUBLIC_TXT_KEY}`;
 export default function BecomeIssuerBtn({ isIssuer }: { isIssuer: boolean }) {
   const [copied, setCopied] = useState<boolean>(false);
@@ -102,14 +105,20 @@ export default function BecomeIssuerBtn({ isIssuer }: { isIssuer: boolean }) {
   return (
     <div>
       {isIssuer ? (
-        // add a toggle state later
-        <div>{"You're already an issuer"}</div>
+        <SidebarMenuItem key={"issuer link"}>
+          <SidebarMenuButton asChild>
+            <Link href={"/dashboard/issuer"}>
+              <CircleUser size={20} />
+              Issuer
+            </Link>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
       ) : (
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button>Become An Issuer</Button>
+            <Button className="glass-container">Become An Issuer</Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="glass-container">
             <DialogHeader>
               <DialogTitle>Application</DialogTitle>
               <DialogDescription>

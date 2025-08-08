@@ -6,7 +6,6 @@ import Link from "next/link";
 export const Hero = () => {
   return (
     <section className="relative pt-32 pb-20 overflow-hidden">
-      {/* Floating Elements */}
       <div className="absolute inset-0 overflow-hidden">
         <motion.div
           animate={{
@@ -18,7 +17,7 @@ export const Hero = () => {
             repeat: Infinity,
             ease: "easeInOut",
           }}
-          className="absolute top-20 left-10 w-20 h-20 rounded-full bg-gradient-to-r from-blue-400/20 to-purple-400/20 backdrop-blur-sm"
+          className="absolute top-20 left-10 w-20 h-20 rounded-full bg-gradient-to-r from-purple-400/20 to-purple-400/20 backdrop-blur-sm"
         />
         <motion.div
           animate={{
@@ -30,7 +29,7 @@ export const Hero = () => {
             repeat: Infinity,
             ease: "easeInOut",
           }}
-          className="absolute top-40 right-20 w-32 h-32 rounded-full bg-gradient-to-r from-purple-400/20 to-pink-400/20 backdrop-blur-sm"
+          className="absolute top-40 right-20 w-32 h-32 rounded-full bg-gradient-to-r from-purple-400/20 to-yellow-400/20 backdrop-blur-sm"
         />
         <motion.div
           animate={{
@@ -42,13 +41,12 @@ export const Hero = () => {
             repeat: Infinity,
             ease: "easeInOut",
           }}
-          className="absolute bottom-20 left-1/4 w-16 h-16 rounded-full bg-gradient-to-r from-green-400/20 to-blue-400/20 backdrop-blur-sm"
+          className="absolute bottom-20 left-1/4 w-16 h-16 rounded-full bg-gradient-to-r from-yellow-400/20 to-purple-400/20 backdrop-blur-sm"
         />
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
-          {/* Left Content */}
           <motion.div
             initial={{ opacity: 0, x: -50 }}
             animate={{ opacity: 1, x: 0 }}
@@ -60,16 +58,16 @@ export const Hero = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.4 }}
-                className="inline-flex items-center px-4 py-2 rounded-full bg-gradient-to-r from-blue-100/50 to-purple-100/50 backdrop-blur-sm border border-white/30"
+                className="inline-flex items-center px-4 py-2 rounded-full bg-gradient-to-r from-purple-100/50 to-purple-100/50 backdrop-blur-sm border border-white/30"
               >
-                <Zap className="h-4 w-4 text-blue-600 mr-2" />
-                <span className="text-sm font-medium text-blue-700">
+                <Zap className="h-4 w-4 text-purple-600 mr-2" />
+                <span className="text-sm font-medium text-purple-700">
                   Powered by Blockchain Technology
                 </span>
               </motion.div>
 
               <h1 className="text-5xl lg:text-6xl font-bold leading-tight">
-                <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 bg-clip-text text-transparent">
+                <span className="bg-gradient-to-r from-purple-600 via-purple-600 to-purple-800 bg-clip-text text-transparent">
                   Secure Certificate
                 </span>
                 <br />
@@ -86,7 +84,7 @@ export const Hero = () => {
             <div className="flex flex-col sm:flex-row gap-4">
               <Link
                 href="/issue"
-                className="group px-8 py-4 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold hover:from-blue-600 hover:to-purple-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center justify-center"
+                className="group px-8 py-4 rounded-xl bg-gradient-to-r from-purple-500 to-purple-600 text-white font-semibold hover:from-purple-600 hover:to-purple-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center justify-center"
               >
                 Issue Certificate
                 <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
@@ -100,7 +98,6 @@ export const Hero = () => {
               </Link>
             </div>
 
-            {/* Stats */}
             <div className="grid grid-cols-3 gap-6 pt-8">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -108,7 +105,7 @@ export const Hero = () => {
                 transition={{ duration: 0.6, delay: 0.6 }}
                 className="text-center"
               >
-                <div className="text-2xl font-bold text-blue-600">10K+</div>
+                <div className="text-2xl font-bold text-purple-600">10K+</div>
                 <div className="text-sm text-gray-600">Certificates Issued</div>
               </motion.div>
               <motion.div
@@ -126,13 +123,12 @@ export const Hero = () => {
                 transition={{ duration: 0.6, delay: 0.8 }}
                 className="text-center"
               >
-                <div className="text-2xl font-bold text-green-600">5+</div>
+                <div className="text-2xl font-bold text-yellow-600">5+</div>
                 <div className="text-sm text-gray-600">Blockchains</div>
               </motion.div>
             </div>
           </motion.div>
 
-          {/* Right Content - Visual */}
           <motion.div
             initial={{ opacity: 0, x: 50 }}
             animate={{ opacity: 1, x: 0 }}
@@ -140,7 +136,6 @@ export const Hero = () => {
             className="relative"
           >
             <div className="relative">
-              {/* Main Certificate Card */}
               <motion.div
                 animate={{
                   y: [0, -10, 0],
@@ -155,7 +150,7 @@ export const Hero = () => {
               >
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center space-x-3">
-                    <div className="p-2 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600">
+                    <div className="p-2 rounded-lg bg-gradient-to-r from-purple-500 to-purple-600">
                       <Shield className="h-6 w-6 text-white" />
                     </div>
                     <div>
@@ -191,7 +186,7 @@ export const Hero = () => {
                   </div>
                   <div className="flex items-center justify-between pt-4 border-t border-white/20">
                     <div className="flex items-center space-x-2">
-                      <Globe className="h-4 w-4 text-blue-500" />
+                      <Globe className="h-4 w-4 text-purple-500" />
                       <span className="text-sm text-gray-600">
                         Ethereum Network
                       </span>
@@ -201,7 +196,6 @@ export const Hero = () => {
                 </div>
               </motion.div>
 
-              {/* Background Cards */}
               <motion.div
                 animate={{
                   y: [0, 15, 0],
@@ -212,7 +206,7 @@ export const Hero = () => {
                   repeat: Infinity,
                   ease: "easeInOut",
                 }}
-                className="absolute -top-4 -right-4 w-full h-full rounded-2xl bg-gradient-to-r from-purple-400/20 to-pink-400/20 backdrop-blur-sm border border-white/20"
+                className="absolute -top-4 -right-4 w-full h-full rounded-2xl bg-gradient-to-r from-purple-400/20 to-yellow-400/20 backdrop-blur-sm border border-white/20"
               />
               <motion.div
                 animate={{
@@ -224,7 +218,7 @@ export const Hero = () => {
                   repeat: Infinity,
                   ease: "easeInOut",
                 }}
-                className="absolute -top-8 -right-8 w-full h-full rounded-2xl bg-gradient-to-r from-blue-400/20 to-purple-400/20 backdrop-blur-sm border border-white/20"
+                className="absolute -top-8 -right-8 w-full h-full rounded-2xl bg-gradient-to-r from-purple-400/20 to-purple-400/20 backdrop-blur-sm border border-white/20"
               />
             </div>
           </motion.div>

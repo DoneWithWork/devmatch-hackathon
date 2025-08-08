@@ -1,23 +1,20 @@
-"use client";
+import Landing from "@/components/landing";
 import { Features } from "@/components/landing/Features";
-import { Footer } from "@/components/landing/Footer";
 import { Hero } from "@/components/landing/Hero";
 import Navbar from "@/components/landing/Navbar";
-import { motion } from "framer-motion";
+import { getSession } from "@/utils/session";
+import { cookies } from "next/headers";
 
-export default function Home() {
+export default async function Home() {
+  const session = await getSession(await cookies());
+  const loggedIn = session.id ? true : false;
   return (
     <div>
-      <Navbar />
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.6 }}
-      >
+      <Navbar loggedIn={loggedIn} />
+      <Landing>
         <Hero />
         <Features />
-        <Footer />
-      </motion.div>
+      </Landing>
     </div>
   );
 }

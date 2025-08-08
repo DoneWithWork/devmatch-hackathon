@@ -1,7 +1,7 @@
 "use client";
-import React from "react";
 import { motion } from "framer-motion";
-import { Shield, Zap, Globe, Lock, Users, TrendingUp } from "lucide-react";
+import { Globe, Lock, Shield, TrendingUp, Users, Zap } from "lucide-react";
+import LoginBtn from "../LoginBtn";
 
 export const Features = () => {
   const features = [
@@ -132,13 +132,7 @@ export const Features = () => {
             Join thousands of organizations already using CertifyChain to issue
             and verify certificates with blockchain technology.
           </p>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="px-8 py-4 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold hover:from-blue-600 hover:to-purple-700 transition-all duration-300 shadow-lg hover:shadow-xl"
-          >
-            Get Started Today
-          </motion.button>
+          <LoginBtn text="Get Started" />
         </motion.div>
       </div>
     </section>

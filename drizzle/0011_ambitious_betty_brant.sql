@@ -1,0 +1,1 @@
+ALTER TABLE "single_cert" ALTER COLUMN "certificate_id" DROP NOT NULL;

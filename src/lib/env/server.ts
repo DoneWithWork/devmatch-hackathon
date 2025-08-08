@@ -6,7 +6,8 @@ export const env = createEnv({
         DATABASE_URL: z.string().url(),
         PRIVATE_ENOKI_KEY: z.string().min(1),
         SESSION_KEY: z.string().min(1),
-        UPLOADTHING_TOKEN: z.string().min(1)
+        UPLOADTHING_TOKEN: z.string().min(1),
+        SUI_PRIVATE_KEY: z.string().min(1),
     },
 
     experimental__runtimeEnv: process.env

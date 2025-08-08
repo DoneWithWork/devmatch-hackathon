@@ -52,6 +52,35 @@ export const ourFileRouter = {
             if (!newIssuerDocument) throw new Error("Failed to create new issuer document")
             return { fileUrl: file.ufsUrl };
         }),
+    certificateUploader: f({
+        image: {
+            maxFileCount: 10,
+            maxFileSize: "4MB"
+        }
+
+    })
+        // Set permissions and file types for this FileRoute
+        .middleware(async ({ }) => {
+            // This code runs on your server before upload
+            const user = await auth();
+            if (!user) throw new UploadThingError("Unauthorized");
+            if (user?.role === "user") throw new UploadThingError("Unauthorized")
+
+            return { userId: user.id };
+        })
+        .onUploadComplete(async ({ metadata, file }) => {
+            // This code RUNS ON YOUR SERVER after upload
+            console.log("Upload complete for userId:", metadata.userId);
+
+            console.log("file url", file.ufsUrl);
+            const newIssuerDocument = await db.insert(issuerDocuments).values({
+                key: file.key,
+                publicUrl: file.ufsUrl,
+                userId: metadata.userId
+            })
+            if (!newIssuerDocument) throw new Error("Failed to create new issuer document")
+            return { fileUrl: file.ufsUrl };
+        }),
 } satisfies FileRouter;
 
 export type OurFileRouter = typeof ourFileRouter;
