@@ -3,7 +3,7 @@ import React from "react";
 
 export default function NewIssuer() {
   return (
-    <div className="w-full px-2 py-4">
+    <div className="w-full px-2 py-4 z-10">
       <h1 className="text-3xl mt-4 font-semibold mb-4 text-center">
         New Certificate
       </h1>

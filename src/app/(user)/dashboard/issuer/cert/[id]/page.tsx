@@ -24,9 +24,9 @@ export default async function IssuerSingleCertPage({
     redirect("/dashboard/issuer");
   }
   return (
-    <div className="w-full">
+    <div className="">
       <div
-        className="h-20 w-full"
+        className="h-20 w-full "
         style={{ backgroundColor: cert.colour }}
       ></div>
       <div className="px-3 py-3">

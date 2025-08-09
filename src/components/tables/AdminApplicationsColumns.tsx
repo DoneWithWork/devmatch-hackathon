@@ -1,5 +1,7 @@
 "use client";
 
+import { ApproveApplication } from "@/app/actions/action/applications/approve";
+import { RejectApplication } from "@/app/actions/action/applications/reject";
 import {
   Dialog,
   DialogContent,
@@ -16,21 +18,11 @@ import {
 import { ApplicationWithDocuments, initialState } from "@/types/types";
 import { ColumnDef, Row } from "@tanstack/react-table";
 import { Check, Loader2, X } from "lucide-react";
+import { useActionState, useEffect } from "react";
+import { toast } from "sonner";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
-import { useActionState, useEffect } from "react";
-import { ApproveApplication } from "@/app/actions/action/applications/approve";
-import { toast } from "sonner";
-import { RejectApplication } from "@/app/actions/action/applications/reject";
-// This type is used to define the shape of our data.
-// You can use a Zod schema here if you want.
-export type Payment = {
-  id: string;
-  amount: number;
-  status: "pending" | "processing" | "success" | "failed";
-  email: string;
-};
 
 export const AdminApplicationsColumn: ColumnDef<ApplicationWithDocuments>[] = [
   {

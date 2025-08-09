@@ -13,8 +13,8 @@ export async function ToggleIssuerRoleAction() {
         where: eq(users.id, session.id)
     })
     if (!user) return { success: false }
-    if (user.role !== "issuer") return { success: false }
+    if (user.role !== "issuer") return { success: false, errorMessage: "Apply to be an issuer!!" }
     session.role = "issuer";
     await session.save();
-    return { success: true };
+    return { success: true, errorMessage: null };
 }

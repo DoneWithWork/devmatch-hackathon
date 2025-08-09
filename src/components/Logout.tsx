@@ -10,6 +10,9 @@ export default function Logout() {
     startTransition(async () => {
       await action();
     });
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("ephemeral-key-pair");
+    }
   }
   return (
     <div>

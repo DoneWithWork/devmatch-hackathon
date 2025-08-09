@@ -106,7 +106,7 @@ export default function Auth() {
           userSignature: signed.signature,
         });
 
-        const executed = await client.executeTransactionBlock({
+        await client.executeTransactionBlock({
           transactionBlock: signed!.bytes,
           signature: [userSignature, sponsorSig],
           options: {
@@ -126,7 +126,7 @@ export default function Auth() {
         });
         toast.success("Successfully logged in!");
         setTimeout(() => {
-          router.push("/dashboard");
+          router.push("/dashboard/certificates");
         }, 500);
       } catch (e: unknown) {
         const error = e as Error;

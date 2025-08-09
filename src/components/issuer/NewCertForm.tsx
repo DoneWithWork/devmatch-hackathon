@@ -78,9 +78,9 @@ export default function NewCertificateForm() {
   return (
     <form
       onSubmit={handleSubmit(onSubmit)}
-      className="space-y-4 w-full max-w-5xl mx-auto border-2 px-2 py-2 rounded-md glass-container"
+      className="space-y-4 w-full max-w-5xl mx-auto border-2 px-2 py-2 rounded-md glass-container "
     >
-      <div className="space-y-3 mt-5">
+      <div className="space-y-3 mt-5 ">
         <Label>Title</Label>
         <Input
           type="text"

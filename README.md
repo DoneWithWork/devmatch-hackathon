@@ -116,13 +116,14 @@ const newTrx = Transaction.from(sponsoredBytes);
 ---
 
 ## Certificate Issuance
-
-
+1. A user is able to mint a new certificate when an issuer has given a certificate
+2. Gas fees are paid by us, utilising SUI's ability to make sponsored transactions
 
 ---
 
 ## Admin Role
-
+1. Admins are in charge of approving issuers who apply.
+2. Able to reject and approve applications.
 
 
 ---

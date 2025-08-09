@@ -32,7 +32,6 @@ export const ourFileRouter = {
         .middleware(async ({ }) => {
             // This code runs on your server before upload
             const user = await auth();
-            (user)
             if (!user) throw new UploadThingError("Unauthorized");
 
             return { userId: user.id };

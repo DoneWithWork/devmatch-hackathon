@@ -12,7 +12,7 @@ export type Payment = {
   email: string;
 };
 
-export const CertificatesIssuerColumn: ColumnDef<
+export const AdminCertificateColumn: ColumnDef<
   InferSelectModel<typeof individualCert>
 >[] = [
   {

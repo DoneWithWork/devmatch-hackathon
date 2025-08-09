@@ -7,6 +7,7 @@ import { SidebarMenuButton, SidebarMenuItem } from "./ui/sidebar";
 
 const initialState = {
   success: false,
+  errorMessage: null,
 };
 export default function BecomeIssuer() {
   const [state, action, pending] = useActionState(
@@ -16,6 +17,9 @@ export default function BecomeIssuer() {
   useEffect(() => {
     if (state.success) {
       toast.success("Toggled successfully!!");
+    }
+    if (!state.success && state.errorMessage) {
+      toast.error(state.errorMessage);
     }
   }, [state]);
   return (

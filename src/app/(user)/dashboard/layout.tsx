@@ -22,11 +22,12 @@ export default async function UserLayout({
   const cookieStore = await cookies();
   const defaultOpen = cookieStore.get("sidebar_state")?.value === "true";
   const hasApplied = issuerApplications ? true : false;
-  hasApplied;
   return (
     <SidebarProvider defaultOpen={defaultOpen}>
       <UserSidebar hasApplied={hasApplied} />
-      <Deco>{children}</Deco>
+      <Deco>
+        <div className="px-4 py-5">{children}</div>
+      </Deco>
     </SidebarProvider>
   );
 }

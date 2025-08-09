@@ -1,4 +1,5 @@
 import { AppSidebar } from "@/components/app-sidebar";
+import Deco from "@/components/Deco";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import db from "@/db/drizzle";
 import { users } from "@/db/schema";
@@ -23,7 +24,9 @@ export default async function AdminLayout({
   return (
     <SidebarProvider>
       <AppSidebar />
-      {children}
+      <Deco>
+        <div className="z-10">{children}</div>
+      </Deco>
     </SidebarProvider>
   );
 }

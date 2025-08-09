@@ -17,7 +17,7 @@ export default function BecomeAdmin() {
       toast.success("You are now an admin!!");
       router.push("/admin");
     }
-  }, [state]);
+  }, [state, router]);
   return (
     <SidebarMenuItem>
       <SidebarMenuButton

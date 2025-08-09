@@ -20,7 +20,7 @@ export default async function CertificatesPage() {
   });
 
   return (
-    <section className=" mx-auto z-10">
+    <section className="">
       {/* Page Title */}
       <h1 className="text-3xl font-bold text-gray-800 text-center mb-6">
         My Certificates
