@@ -6,10 +6,9 @@ import { motion } from "framer-motion";
 import { Shield } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { FaTwitch } from "react-icons/fa";
 import { FcGoogle } from "react-icons/fc";
 import { IconType } from "react-icons/lib";
-import { SiApple, SiFacebook } from "react-icons/si";
+import { SiFacebook } from "react-icons/si";
 import sui from "../public/sui.svg";
 import {
   getEphemeralKeyPairsFromStorage,
@@ -31,18 +30,7 @@ const providers: ProviderTypes[] = [
     colour: "bg-white",
     textColour: "text-black",
   },
-  {
-    provider: "twitch",
-    icon: FaTwitch,
-    colour: "bg-[#8956FB]",
-    textColour: "text-white",
-  },
-  {
-    provider: "apple",
-    icon: SiApple,
-    colour: "bg-black",
-    textColour: "text-white",
-  },
+
   {
     provider: "facebook",
     icon: SiFacebook,
@@ -102,7 +90,7 @@ export default function SignInCom() {
           <p className="text-base text-gray-800 mt-3 font-medium">
             Sign In With Your Social Provider
           </p>
-          <div className="w-full h-full mx-2 my-3 flex flex-col items-center gap-5 mt-10 ">
+          <div className="w-full h-full mx-2 my-3 flex flex-col items-center justify-center gap-8 mt-10 ">
             {providers.map((provider, index) => (
               <button
                 onClick={async () => {
@@ -149,18 +137,19 @@ async function generateOAuthProviderLink({
 }): Promise<string> {
   // Try to get stored key pair
   const stored = await getEphemeralKeyPairsFromStorage("ephemeral-key-pair");
-
+  const { epoch } = await getSuiClient().getLatestSuiSystemState();
   let ephemeralKeyPair: Ed25519Keypair;
   let randomness: string;
   let maxEpoch: number;
-  if (stored) {
+  if (stored && stored.maxEpoch < +epoch) {
     ({ ephemeralKeyPair, maxEpoch, randomness } = stored);
   } else {
+    // generate new key paid
     randomness = generateRandomness();
     ephemeralKeyPair = new Ed25519Keypair();
     const { epoch } = await getSuiClient().getLatestSuiSystemState();
     maxEpoch = Number(epoch) + 10;
-
+    // store this epoch
     await storeEphemeralKeyPair(ephemeralKeyPair, randomness, maxEpoch);
   }
   const nonce = generateNonce(
@@ -179,10 +168,10 @@ type ReturnUrlType = {
 function returnUrl({ provider, nonce }: ReturnUrlType): string {
   switch (provider) {
     case "google":
-      return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${env.NEXT_PUBLIC_GOOGLE_CLIENT_ID}&response_type=id_token&redirect_uri=${env.NEXT_PUBLIC_REDIRECT_URL}&scope=openid&nonce=${nonce}`;
+      return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${env.NEXT_PUBLIC_GOOGLE_CLIENT_ID}&response_type=id_token&redirect_uri=${env.NEXT_PUBLIC_REDIRECT_URL}&scope=openid%20email%20profile&nonce=${nonce}`;
 
     case "facebook":
-      return `https://www.facebook.com/v17.0/dialog/oauth?client_id=${env.NEXT_PUBLIC_FACEBOOK_CLIENT_ID}&redirect_uri=${env.NEXT_PUBLIC_REDIRECT_URL}&scope=openid&nonce=${nonce}&response_type=id_token`;
+      return `https://www.facebook.com/v17.0/dialog/oauth?client_id=${env.NEXT_PUBLIC_FACEBOOK_CLIENT_ID}&redirect_uri=${env.NEXT_PUBLIC_REDIRECT_URL}&scope=openid%20email&nonce=${nonce}&response_type=id_token`;
 
     case "twitch":
       return `https://id.twitch.tv/oauth2/authorize?client_id=${env.NEXT_PUBLIC_TWITCH_CLIENT_ID}&force_verify=true&lang=en&login_type=login&redirect_uri=${env.NEXT_PUBLIC_REDIRECT_URL}&response_type=id_token&scope=openid&nonce=${nonce}`;

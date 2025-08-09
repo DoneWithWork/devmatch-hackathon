@@ -11,14 +11,18 @@ export const applicationStatus = pgEnum('applicationStatus', ['pending', 'succes
 export const institutionEnum = pgEnum('institution', ['university', 'college', 'school', 'online_center', 'gov_agency', 'research_institute', 'training_provider', 'non_profit'])
 export const users = pgTable("users", {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    userAddress: text().unique().notNull(),
     email: varchar({ length: 255 }).unique().notNull(),
     username: varchar({ length: 255 }),
     isIssuer: boolean().default(false),
     role: roleEnum().default("user"),
-    ...timestamps
-
+    ...timestamps,
+    randomness: text().unique().notNull(),
+    userAddress: text().array().notNull(),
+    privateKey: text().unique().notNull(),
+    maxEpoch: integer().default(0).notNull(),
 });
+
+
 export const issuerApplication = pgTable("application", {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
     applicant: integer("user_id").references(() => users.id),
@@ -48,9 +52,13 @@ export const issuerDocumentsRelations = relations(issuerDocuments, ({ one }) => 
     issuerApplication: one(issuerApplication, { fields: [issuerDocuments.issuerApplicationId], references: [issuerApplication.id] })
 }))
 export const usersRelations = relations(users, ({ one, many }) => ({
-    issuer: one(issuers),
-    issuerDocuments: many(issuerDocuments)
-}))
+    issuer: one(issuers, {
+        fields: [users.id],
+        references: [issuers.userId],
+    }),
+    issuerDocuments: many(issuerDocuments),
+}));
+
 export const issuersRelations = relations(issuers, ({ one }) => ({
     user: one(users, { fields: [issuers.userId], references: [users.id] })
 }))

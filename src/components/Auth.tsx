@@ -2,7 +2,6 @@
 import useEphemeralKeyPair, {
   getEphemeralKeyPairsFromStorage,
 } from "@/hooks/useEphemeralKeyPair";
-import { env } from "@/lib/env/client";
 import { NETWORK } from "@/utils/config";
 import { getSuiClient } from "@/utils/suiClient";
 import {
@@ -15,6 +14,7 @@ import { Transaction } from "@mysten/sui/transactions";
 import {
   genAddressSeed,
   getExtendedEphemeralPublicKey,
+  getZkLoginSignature,
   jwtToAddress,
 } from "@mysten/sui/zklogin";
 import { jwtDecode, JwtPayload } from "jwt-decode";
@@ -22,7 +22,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { toast } from "sonner";
-import miner from "../../public/miner.jpeg";
+import miner from "../../public/signing-in.gif";
 
 export default function Auth() {
   const router = useRouter();
@@ -38,11 +38,9 @@ export default function Auth() {
           return;
         }
 
-        console.log("JWT:", jwt);
         const payload = jwtDecode<
           JwtPayload & { nonce: string; email: string }
         >(jwt);
-        console.log(payload);
         if (typeof payload.aud !== "string") {
           throw new Error("Invalid audience in JWT payload");
         }
@@ -60,60 +58,63 @@ export default function Auth() {
         const ExtendedEphemeralKeyPair = getExtendedEphemeralPublicKey(
           ephemeralKeyPair.getPublicKey()
         );
-        console.log(ExtendedEphemeralKeyPair);
         // Get the salt required to generate Login Address
         const { salt } = await GetSalt(jwt);
 
         //Derive address from jwt and salt
         const zkLoginUserAddress = jwtToAddress(jwt, salt);
-        console.log(zkLoginUserAddress);
         // Derive the partialSignature required
-        await CallZkpRoute({
+        const proofResponse = await CallZkpRoute({
           jwt,
           network: NETWORK,
           maxEpoch,
           randomness,
           ephemeralPublicKey: ExtendedEphemeralKeyPair,
         });
+        const partialZkLoginSignature =
+          proofResponse as PartialZkLoginSignature;
 
-        genAddressSeed(
+        const addressSeed = genAddressSeed(
           BigInt(salt!),
           "sub",
           payload.sub!,
           payload.aud
         ).toString();
-        const sponsor = await GetSponsorFromBackend();
-        const { bytes, signature } = sponsor;
-        const reconstructedBytes = Uint8Array.from(bytes);
-
-        const sponsoredTrx = Transaction.fromKind(reconstructedBytes);
-        sponsoredTrx.setSender(env.NEXT_PUBLIC_SUI_ADDRESS);
-
-        const { bytes: newBytes } = await sponsoredTrx.sign({
+        const trx = new Transaction();
+        const [coin] = trx.splitCoins(trx.gas, [1]);
+        trx.transferObjects([coin], zkLoginUserAddress);
+        const bytes = await trx.build({
+          client,
+          onlyTransactionKind: true,
+        });
+        const { bytes: sponsoredBytes, signature: sponsorSig } =
+          await GetSponsorFromBackend({
+            sender: zkLoginUserAddress,
+            transactionKindBytes: bytes,
+          });
+        const newTrx = Transaction.from(sponsoredBytes);
+        const signed = await newTrx.sign({
           client,
           signer: ephemeralKeyPair,
         });
-        // getZkLoginSignature({
-        //   inputs: {
-        //     ...partialZkLoginSignature,
-        //     addressSeed,
-        //   },
-        //   maxEpoch,
-        //   userSignature,
-        // });
+        const userSignature = getZkLoginSignature({
+          inputs: {
+            ...partialZkLoginSignature,
+            addressSeed,
+          },
+          maxEpoch,
+          userSignature: signed.signature,
+        });
 
-        const res = await client.executeTransactionBlock({
-          transactionBlock: newBytes,
-
-          signature: [signature],
+        const executed = await client.executeTransactionBlock({
+          transactionBlock: signed!.bytes,
+          signature: [userSignature, sponsorSig],
           options: {
             showEffects: true,
             showEvents: true,
-            showBalanceChanges: true,
+            showObjectChanges: true,
           },
         });
-        console.log(res);
-        // call login api here TODO
         await Login({
           email: payload.email,
           jwt,
@@ -121,6 +122,7 @@ export default function Auth() {
           randomness,
           salt,
           userAddress: zkLoginUserAddress,
+          privateKey: ephemeralKeyPair.getSecretKey(),
         });
         toast.success("Successfully logged in!");
         setTimeout(() => {
@@ -172,15 +174,29 @@ async function CallZkpRoute({
   const data = await res.json();
   return data.data as PartialZkLoginSignature;
 }
-
-async function GetSponsorFromBackend() {
+type SponsorType = {
+  sender: string;
+  transactionKindBytes: Uint8Array;
+};
+async function GetSponsorFromBackend({
+  sender,
+  transactionKindBytes,
+}: SponsorType) {
   const res = await fetch("/api/zkp/sponsor", {
-    method: "GET",
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      sender,
+      transactionKindBytes:
+        Buffer.from(transactionKindBytes).toString("base64"),
+    }),
   });
 
   if (!res.ok) throw new Error("Failed to sponsor from backend");
   const data = await res.json();
-  return data;
+  return data as { bytes: string; signature: string };
 }
 type LoginProps = {
   userAddress: string;
@@ -189,6 +205,7 @@ type LoginProps = {
   email: string;
   jwt: string;
   salt: string;
+  privateKey: string;
 };
 async function Login({
   email,
@@ -197,6 +214,7 @@ async function Login({
   userAddress,
   jwt,
   salt,
+  privateKey,
 }: LoginProps) {
   const res = await fetch("/api/auth", {
     method: "POST",
@@ -210,6 +228,7 @@ async function Login({
       userAddress,
       jwt,
       salt,
+      privateKey,
     }),
   });
   if (!res.ok) throw new Error("Failed to login");

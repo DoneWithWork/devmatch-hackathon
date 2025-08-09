@@ -62,7 +62,7 @@ export const Features = () => {
         >
           <h2 className="text-4xl lg:text-5xl font-bold mb-6">
             <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              Why Choose CertifyChain?
+              Why Choose HashCred?
             </span>
           </h2>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
@@ -129,8 +129,8 @@ export const Features = () => {
             Ready to secure your certificates?
           </h3>
           <p className="text-gray-600 mb-8 max-w-2xl mx-auto">
-            Join thousands of organizations already using CertifyChain to issue
-            and verify certificates with blockchain technology.
+            Join thousands of organizations already using HashCred to issue and
+            verify certificates with blockchain technology.
           </p>
           <LoginBtn text="Get Started" />
         </motion.div>

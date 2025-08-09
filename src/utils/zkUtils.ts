@@ -10,7 +10,6 @@ interface GetSaltResponseType {
 }
 export async function parseJWTFromURL(url: string): Promise<string | null> {
     const urlObject = new URL(url);
-    console.log(url);
     const fragment = urlObject.hash.substring(1);
     const params = new URLSearchParams(fragment);
     return params.get("id_token");
@@ -51,12 +50,7 @@ export interface ZkLoginType {
 export async function GenerateZkLogin(
     { jwt, network, maxEpoch, randomness, ephemeralPublicKey }: GenerateZkLoginProps
 ) {
-    console.log(JSON.stringify({
-        network,
-        ephemeralPublicKey,
-        maxEpoch,
-        randomness
-    }),)
+
     const res = await fetch("https://api.enoki.mystenlabs.com/v1/zklogin/zkp", {
         headers: {
             "zklogin-jwt": jwt,
@@ -72,7 +66,6 @@ export async function GenerateZkLogin(
         }),
         method: "POST"
     });
-    console.log(res.status)
     if (!res.ok) throw new Error("Zk Login Generation service failed!!")
     return await res.json()
 

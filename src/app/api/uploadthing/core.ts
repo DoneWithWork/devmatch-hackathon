@@ -10,13 +10,11 @@ const f = createUploadthing();
 
 const auth = async () => {
     const session = await getSession(await cookies())
-    console.log("here")
-    console.log(session)
+
     if (!session) throw new Error("Failed to detect session");
     const user = await db.query.users.findFirst({
         where: eq(users.id, +session.id)
     })
-    console.log(user)
     return user
 }; // Fake auth function
 
@@ -34,16 +32,14 @@ export const ourFileRouter = {
         .middleware(async ({ }) => {
             // This code runs on your server before upload
             const user = await auth();
-            console.log(user)
+            (user)
             if (!user) throw new UploadThingError("Unauthorized");
 
             return { userId: user.id };
         })
         .onUploadComplete(async ({ metadata, file }) => {
             // This code RUNS ON YOUR SERVER after upload
-            console.log("Upload complete for userId:", metadata.userId);
 
-            console.log("file url", file.ufsUrl);
             const newIssuerDocument = await db.insert(issuerDocuments).values({
                 key: file.key,
                 publicUrl: file.ufsUrl,
@@ -70,9 +66,7 @@ export const ourFileRouter = {
         })
         .onUploadComplete(async ({ metadata, file }) => {
             // This code RUNS ON YOUR SERVER after upload
-            console.log("Upload complete for userId:", metadata.userId);
 
-            console.log("file url", file.ufsUrl);
             const newIssuerDocument = await db.insert(issuerDocuments).values({
                 key: file.key,
                 publicUrl: file.ufsUrl,

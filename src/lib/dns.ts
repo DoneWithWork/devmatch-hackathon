@@ -13,7 +13,6 @@ export async function checkTXTRecord({ domain, matchingKey, matchingValue }: TXT
         const records = await customResolver.resolveTxt(domain);
         for (const recordChunks of records) {
             const record = recordChunks.join('');
-            console.log(record)
             const [key, value] = record.split('=')
             if (key === matchingKey && matchingValue === value) return true;
         }

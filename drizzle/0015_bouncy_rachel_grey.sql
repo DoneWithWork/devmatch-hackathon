@@ -1,1 +1,0 @@
-ALTER TABLE "certs" ALTER COLUMN "colour" SET DEFAULT '#000000';

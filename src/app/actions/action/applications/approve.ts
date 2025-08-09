@@ -25,7 +25,7 @@ export async function ApproveApplication(prevState: ActionResponse<ApprovalType>
         where: eq(users.id, session.id)
     })
     if (!user) return { success: false, errorMessage: "No user found!!" }
-    if (user.role !== "admin") return { success: false, errorMessage: 'Not an admin' }
+    if (session.role !== "admin") return { success: false, errorMessage: 'Not an admin' }
     const rawData: ApprovalType = {
         id: formData.get("id") as string,
     }
@@ -54,7 +54,7 @@ export async function ApproveApplication(prevState: ActionResponse<ApprovalType>
         role: "issuer",
 
     }).where(eq(users.id, user.id))
-    session.role = "issuer"
+    session.role = "admin"
     await session.save();
     return { success: true, message: "Successfully approved issuer" }
 

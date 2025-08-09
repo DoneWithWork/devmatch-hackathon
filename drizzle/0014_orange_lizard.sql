@@ -1,1 +1,0 @@
-ALTER TABLE "certs" ADD COLUMN "colour" varchar(100) NOT NULL;

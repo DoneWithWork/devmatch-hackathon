@@ -19,7 +19,6 @@ export default async function IssuerSingleCertPage({
     .select()
     .from(individualCert)
     .where(eq(individualCert.certificateId, Number(id)));
-  console.log(individuals);
   if (!cert) {
     toast("Certificate Not Found!!");
     redirect("/dashboard/issuer");

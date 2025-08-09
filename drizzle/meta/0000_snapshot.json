@@ -1,5 +1,5 @@
 {
-  "id": "ae9f211c-74c3-422c-bdc3-cc1e342de339",
+  "id": "0b5ef44d-7d8f-4828-973e-34df8b848500",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -95,10 +95,62 @@
             "cache": "1",
             "cycle": false
           }
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "colour": {
+          "name": "colour",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'#000000'"
+        },
+        "update_at": {
+          "name": "update_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "certs_user_id_users_id_fk": {
+          "name": "certs_user_id_users_id_fk",
+          "tableFrom": "certs",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -109,16 +161,84 @@
       "name": "single_cert",
       "schema": "",
       "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "single_cert_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
+        },
         "minted": {
           "name": "minted",
           "type": "boolean",
           "primaryKey": false,
           "notNull": false,
           "default": false
+        },
+        "user_email": {
+          "name": "user_email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "certificate_id": {
+          "name": "certificate_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "imageUrl": {
+          "name": "imageUrl",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "update_at": {
+          "name": "update_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "single_cert_certificate_id_certs_id_fk": {
+          "name": "single_cert_certificate_id_certs_id_fk",
+          "tableFrom": "single_cert",
+          "tableTo": "certs",
+          "columnsFrom": [
+            "certificate_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -151,6 +271,53 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": false
+        },
+        "domain": {
+          "name": "domain",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "institution": {
+          "name": "institution",
+          "type": "institution",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'university'"
+        },
+        "status": {
+          "name": "status",
+          "type": "applicationStatus",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'pending'"
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "update_at": {
+          "name": "update_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},
@@ -161,6 +328,114 @@
           "tableTo": "users",
           "columnsFrom": [
             "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "application_domain_unique": {
+          "name": "application_domain_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "domain"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.documents": {
+      "name": "documents",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "documents_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "publicUrl": {
+          "name": "publicUrl",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "issuerApplicationId": {
+          "name": "issuerApplicationId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "update_at": {
+          "name": "update_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "documents_user_id_users_id_fk": {
+          "name": "documents_user_id_users_id_fk",
+          "tableFrom": "documents",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "documents_issuerApplicationId_application_id_fk": {
+          "name": "documents_issuerApplicationId_application_id_fk",
+          "tableFrom": "documents",
+          "tableTo": "application",
+          "columnsFrom": [
+            "issuerApplicationId"
           ],
           "columnsTo": [
             "id"
@@ -263,12 +538,6 @@
             "cycle": false
           }
         },
-        "pubKey": {
-          "name": "pubKey",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "email": {
           "name": "email",
           "type": "varchar(255)",
@@ -279,7 +548,7 @@
           "name": "username",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "isIssuer": {
           "name": "isIssuer",
@@ -293,32 +562,77 @@
           "type": "role",
           "typeSchema": "public",
           "primaryKey": false,
+          "notNull": false,
+          "default": "'user'"
+        },
+        "update_at": {
+          "name": "update_at",
+          "type": "timestamp",
+          "primaryKey": false,
           "notNull": false
         },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": "now()"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "randomness": {
+          "name": "randomness",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "userAddress": {
+          "name": "userAddress",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "privateKey": {
+          "name": "privateKey",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "maxEpoch": {
+          "name": "maxEpoch",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         }
       },
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "users_pubKey_unique": {
-          "name": "users_pubKey_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "pubKey"
-          ]
-        },
         "users_email_unique": {
           "name": "users_email_unique",
           "nullsNotDistinct": false,
           "columns": [
             "email"
+          ]
+        },
+        "users_randomness_unique": {
+          "name": "users_randomness_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "randomness"
+          ]
+        },
+        "users_privateKey_unique": {
+          "name": "users_privateKey_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "privateKey"
           ]
         }
       },
@@ -328,6 +642,29 @@
     }
   },
   "enums": {
+    "public.applicationStatus": {
+      "name": "applicationStatus",
+      "schema": "public",
+      "values": [
+        "pending",
+        "success",
+        "rejected"
+      ]
+    },
+    "public.institution": {
+      "name": "institution",
+      "schema": "public",
+      "values": [
+        "university",
+        "college",
+        "school",
+        "online_center",
+        "gov_agency",
+        "research_institute",
+        "training_provider",
+        "non_profit"
+      ]
+    },
     "public.role": {
       "name": "role",
       "schema": "public",

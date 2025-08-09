@@ -8,7 +8,7 @@ export default function NewCertificateBtn() {
     <Button asChild>
       <Link
         href={"/dashboard/issuer/new"}
-        className="hover:scale-105 duration-300"
+        className="hover:scale-105 duration-300 h-12 cursor-pointer hover:from-orange-600 hover:to-orange-700 transition-all hover:shadow-xl transform hover:scale-[101%]"
       >
         <Plus size={10} className="size-6" />
         <span>New Certificate</span>

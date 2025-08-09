@@ -106,7 +106,10 @@ export default function BecomeIssuerBtn({ isIssuer }: { isIssuer: boolean }) {
     <div>
       {isIssuer ? (
         <SidebarMenuItem key={"issuer link"}>
-          <SidebarMenuButton asChild>
+          <SidebarMenuButton
+            asChild
+            className="cursor-pointer rounded-lg bg-gradient-to-r from-orange-600 to-orange-500 font-medium shadow-lg text-white hover:text-white my-2  hover:from-orange-600 hover:to-orange-700 transition-all duration-200  h-12 hover:shadow-xl transform hover:scale-[101%]"
+          >
             <Link href={"/dashboard/issuer"}>
               <CircleUser size={20} />
               Issuer

@@ -1,1 +1,0 @@
-ALTER TABLE "single_cert" ADD COLUMN "imageUrl" text NOT NULL;

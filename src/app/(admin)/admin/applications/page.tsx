@@ -13,7 +13,6 @@ export default async function AdminApplications() {
       issuerDocuments,
       eq(issuerDocuments.issuerApplicationId, issuerApplication.id)
     );
-  console.log(applications[0]);
   return (
     <div className="w-full px-2 py-2">
       <p>Issuer Applications</p>

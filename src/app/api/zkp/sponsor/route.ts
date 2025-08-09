@@ -1,52 +1,64 @@
-import { env as envClient } from "@/lib/env/client";
 import { env } from "@/lib/env/server";
 import { getSuiClient } from "@/utils/suiClient";
-import { EnokiClient } from '@mysten/enoki';
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { Transaction } from "@mysten/sui/transactions";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-const enokiClient = new EnokiClient({
-    apiKey: env.PRIVATE_ENOKI_KEY,
-});
+import { NETWORK } from "@/utils/config";
+import { SuiObjectRef } from "@mysten/sui/client";
+import { getFaucetHost, requestSuiFromFaucetV2 } from '@mysten/sui/faucet';
 
-
-export async function GET() {
+type SponsorType = {
+    sender: string;
+    transactionKindBytes: string
+}
+export async function POST(req: NextRequest) {
     try {
-        const trx = new Transaction();
+        const body = await req.json()
+
+        const { sender, transactionKindBytes } = body as SponsorType
+        const keyPair = Ed25519Keypair.fromSecretKey(env.SUI_PRIVATE_KEY);
+        const address = keyPair.getPublicKey().toSuiAddress();
+
+        console.log(`Sponsor address: ${address}`)
+
         const client = getSuiClient();
-        const gasPrice = await client.getReferenceGasPrice();
-        const sponsorCoins = await client.getCoins({
-            owner: envClient.NEXT_PUBLIC_SUI_ADDRESS,
-            coinType: "0x2::sui::SUI",
-        });
-        const coinObjects = sponsorCoins.data.map((coin) => ({
-            objectId: coin.coinObjectId,
-            version: Number(coin.version),
-            digest: coin.digest,
-        }));
-        console.log(sponsorCoins)
-        if (coinObjects.length === 0) {
-            throw new Error("Sponsor has no coins available");
+
+        //request testnet funds
+        try {
+            await requestSuiFromFaucetV2({
+                host: getFaucetHost(NETWORK),
+                recipient: address
+            })
+        } catch {
+            console.log("Faucet Failed")
         }
 
-        if (sponsorCoins.data.length === 0) {
-            throw new Error("Sponsor has no coins available");
+        let payment: SuiObjectRef[] = []
+        let retries = 50;
+
+        while (retries !== 0) {
+            const coins = await client.getCoins({ owner: address, limit: 1 });
+            if (coins.data.length > 0) {
+                payment = coins.data.map((coin) => ({
+                    objectId: coin.coinObjectId,
+                    version: coin.version,
+                    digest: coin.digest,
+                }));
+                break;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 200));
+            retries -= 1;
         }
-        console.log(envClient.NEXT_PUBLIC_SUI_ADDRESS)
-        const signer = Ed25519Keypair.fromSecretKey(env.SUI_PRIVATE_KEY);
-        trx.setSender(envClient.NEXT_PUBLIC_SUI_ADDRESS);
-        trx.setGasPrice(gasPrice)
-        trx.setGasOwner(envClient.NEXT_PUBLIC_SUI_ADDRESS);
-        trx.setGasPayment(coinObjects);
-        // const bytes = await trx.build({
-        //     client
-        // })
-        const { bytes, signature } = await trx.sign({
-            client,
-            signer,
-        })
-        return NextResponse.json({ bytes: Array.from(bytes), signature }, {
+        const trxBytes = Uint8Array.from(Buffer.from(transactionKindBytes, 'base64'));
+
+        const trx = Transaction.fromKind(trxBytes)
+        trx.setSender(sender);
+        trx.setGasOwner(address);
+        trx.setGasPayment(payment);
+        const { bytes, signature } = await keyPair.signTransaction(await trx.build({ client }));
+
+        return NextResponse.json({ bytes, signature }, {
             status: 200
         })
     } catch (e: unknown) {

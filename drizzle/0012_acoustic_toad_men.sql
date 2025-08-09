@@ -1,1 +1,0 @@
-ALTER TABLE "single_cert" ALTER COLUMN "certificate_id" SET NOT NULL;

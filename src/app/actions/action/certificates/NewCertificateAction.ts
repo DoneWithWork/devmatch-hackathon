@@ -65,7 +65,6 @@ export async function NewCertificationAction(
             return ""
         }
     })
-    console.log(uploadedUrls)
     // Upload files and pair them
     const colour = RandomColour({ luminosity: "light" })
     const certificate = await db

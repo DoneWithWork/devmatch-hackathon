@@ -1,3 +1,4 @@
+"use client";
 import { LogoutAction } from "@/app/actions/LogoutAction";
 import { LogOut } from "lucide-react";
 import { useActionState, useTransition } from "react";

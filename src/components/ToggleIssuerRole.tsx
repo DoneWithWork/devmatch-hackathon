@@ -1,9 +1,9 @@
 "use client";
 import { ToggleIssuerRoleAction } from "@/app/actions/ToggleIssuerRoleAction";
-import { Loader2 } from "lucide-react";
+import { Loader2, ShieldUser } from "lucide-react";
 import { useActionState, useEffect } from "react";
 import { toast } from "sonner";
-import { Button } from "./ui/button";
+import { SidebarMenuButton, SidebarMenuItem } from "./ui/sidebar";
 
 const initialState = {
   success: false,
@@ -19,9 +19,23 @@ export default function BecomeIssuer() {
     }
   }, [state]);
   return (
-    <Button onClick={action} disabled={pending} className="cursor-pointer glass-container">
-      {pending && <Loader2 size={20} className="size-5 animate-spin" />}
-      Toggle Issuer Role
-    </Button>
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        asChild
+        onClick={action}
+        disabled={pending}
+        className="cursor-pointer rounded-lg bg-gradient-to-r from-blue-500 to-purple-600  font-medium hover:from-blue-600 hover:to-purple-700 transition-all duration-200 shadow-lg h-12 hover:shadow-xl transform hover:scale-[101%] hover:text-white text-white"
+      >
+        <span>
+          {pending ? (
+            <Loader2 size={20} className="size-5 animate-spin" />
+          ) : (
+            <ShieldUser />
+          )}
+
+          <span>Toggle Issuer Role</span>
+        </span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   );
 }
