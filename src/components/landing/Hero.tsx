@@ -83,7 +83,7 @@ export const Hero = () => {
 
             <div className="flex flex-col sm:flex-row gap-4">
               <Link
-                href="/issue"
+                href="/sign-in"
                 className="group px-8 py-4 rounded-xl bg-gradient-to-r from-purple-500 to-purple-600 text-white font-semibold hover:from-purple-600 hover:to-purple-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center justify-center"
               >
                 Issue Certificate
@@ -91,7 +91,7 @@ export const Hero = () => {
               </Link>
 
               <Link
-                href="/verify"
+                href="/sign-in"
                 className="px-8 py-4 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 text-gray-700 font-semibold hover:bg-white/30 transition-all duration-300 flex items-center justify-center"
               >
                 Verify Certificate

@@ -15,8 +15,7 @@ const Navbar = ({ loggedIn }: { loggedIn: boolean }) => {
   const navItems = [
     { name: "Home", path: "/" },
     { name: "Dashboard", path: "/dashboard" },
-    { name: "Issue Certificate", path: "/issue" },
-    { name: "Verify Certificate", path: "/verify" },
+    { name: "View Certificate", path: "/explorer" },
   ];
 
   return (
