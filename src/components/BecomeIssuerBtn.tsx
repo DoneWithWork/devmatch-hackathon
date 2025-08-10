@@ -7,13 +7,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { ApproveIssuerAction } from "@/app/actions/ApproveIssuer";
@@ -37,7 +30,7 @@ import { Label } from "./ui/label";
 import { OurUploadDropzone } from "./UploadDropzone";
 import { env } from "@/lib/env/client";
 const TXT_RECORD = `hashcred=${env.NEXT_PUBLIC_TXT_KEY}`;
-export default function BecomeIssuerBtn({ isIssuer }: { isIssuer: boolean }) {
+export default function BecomeIssuerBtn({ role }: { role: string }) {
   const [copied, setCopied] = useState<boolean>(false);
   const [domain, setDomain] = useState<string | null>(null);
   const [pending, setPending] = useState<boolean>(false);
@@ -101,7 +94,7 @@ export default function BecomeIssuerBtn({ isIssuer }: { isIssuer: boolean }) {
   }
   return (
     <div>
-      {isIssuer ? (
+      {role === "issuer" ? (
         // add a toggle state later
         <div>{"You're already an issuer"}</div>
       ) : (
@@ -117,6 +110,15 @@ export default function BecomeIssuerBtn({ isIssuer }: { isIssuer: boolean }) {
               </DialogDescription>
               <Form {...form}>
                 <form action={action} className="space-y-8">
+                  {/* Hidden input for uploaded files */}
+                  {files.map((fileUrl, index) => (
+                    <input
+                      key={index}
+                      type="hidden"
+                      name={`fileUrl_${index}`}
+                      value={fileUrl}
+                    />
+                  ))}
                   <FormField
                     control={form.control}
                     name="domain"
@@ -205,46 +207,22 @@ export default function BecomeIssuerBtn({ isIssuer }: { isIssuer: boolean }) {
                   </div>
                   <FormField
                     control={form.control}
-                    name="institution"
+                    name="organization"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>3. Institution</FormLabel>
-                        <Select
-                          defaultValue="university"
-                          name="institution"
-                          onValueChange={field.onChange}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select a verified email to display" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="university">
-                              University
-                            </SelectItem>
-                            <SelectItem value="college">College</SelectItem>
-                            <SelectItem value="school">School</SelectItem>
-                            <SelectItem value="online_center">
-                              Online Center
-                            </SelectItem>
-                            <SelectItem value="gov_agency">
-                              Government Agency
-                            </SelectItem>
-                            <SelectItem value="research_institute">
-                              Research Institute
-                            </SelectItem>
-                            <SelectItem value="training_provider">
-                              Training Provider
-                            </SelectItem>
-                            <SelectItem value="non_profit">
-                              Non-Profit Organization
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                        {state?.errors?.institution && (
-                          <p id="city-error" className="text-sm text-red-500">
-                            {state.errors.institution[0]}
+                        <FormLabel>3. Organization Type</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="e.g., University, College, School, Training Center, Government Agency, etc."
+                            {...field}
+                          />
+                        </FormControl>
+                        {state?.errors?.organization && (
+                          <p
+                            id="organization-error"
+                            className="text-sm text-red-500"
+                          >
+                            {state.errors.organization[0]}
                           </p>
                         )}
                       </FormItem>

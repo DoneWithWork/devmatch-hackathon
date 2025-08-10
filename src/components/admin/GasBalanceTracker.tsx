@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -14,9 +13,10 @@ interface BalanceInfo {
 export function GasBalanceTracker() {
   const [adminBalance, setAdminBalance] = useState<BalanceInfo | null>(null);
   const [loading, setLoading] = useState(false);
-  const [tracking, setTracking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const [adminAddress, setAdminAddress] = useState<string>("");
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -57,17 +57,87 @@ export function GasBalanceTracker() {
         if (response.ok) {
           const data = await response.json();
           setAdminBalance(data.balance);
+          setLastUpdated(new Date());
         }
       } catch (error) {
         console.error("Failed to fetch balance:", error);
+        setError("Failed to fetch balance");
       } finally {
         setLoading(false);
       }
     };
 
-    loadBalance();
+    const autoInitializeTracking = async () => {
+      try {
+        // Check if gas balance history exists for this address
+        const historyResponse = await fetch(
+          `/api/admin/gas-history?address=${adminAddress}`
+        );
 
-    // Listen for gas balance refresh events from other components
+        if (historyResponse.ok) {
+          const historyData = await historyResponse.json();
+
+          // If no history records exist, automatically initialize
+          if (!historyData.history || historyData.history.length === 0) {
+            console.log("🔄 Auto-initializing gas balance tracking...");
+
+            const initResponse = await fetch("/api/admin/init-gas-tracking", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                addresses: [adminAddress],
+                forceRefresh: false,
+              }),
+            });
+
+            if (initResponse.ok) {
+              console.log("✅ Gas balance tracking auto-initialized");
+            }
+          }
+        }
+      } catch (error) {
+        console.warn("⚠️ Auto-initialization check failed:", error);
+      }
+    };
+
+    // Initial load
+    loadBalance();
+    autoInitializeTracking();
+
+    // Set up Server-Sent Events for real-time balance updates
+    const eventSource = new EventSource(
+      `/api/admin/balance-update?address=${adminAddress}`
+    );
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        if (data.type === "balance_update" && data.address === adminAddress) {
+          console.log("📡 Received balance update:", data);
+
+          // Update balance from the real-time notification
+          const suiBalance = parseFloat(data.balanceInSui);
+          const mistBalance = parseInt(data.balance);
+
+          setAdminBalance({
+            sui: suiBalance,
+            mist: mistBalance,
+            formatted: `${suiBalance.toFixed(9)} SUI`,
+          });
+          setLastUpdated(new Date(data.timestamp));
+        }
+      } catch (error) {
+        console.warn("⚠️ Failed to parse SSE data:", error);
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      console.warn("⚠️ SSE connection error:", error);
+      setError("Connection error - balance may not update in real-time");
+    };
+
+    // Listen for manual refresh events from other components
     const handleRefreshGasBalance = () => {
       loadBalance();
     };
@@ -76,8 +146,9 @@ export function GasBalanceTracker() {
       window.addEventListener("refreshGasBalance", handleRefreshGasBalance);
     }
 
-    // Cleanup event listener
+    // Cleanup
     return () => {
+      eventSource.close();
       if (typeof window !== "undefined") {
         window.removeEventListener(
           "refreshGasBalance",
@@ -86,35 +157,6 @@ export function GasBalanceTracker() {
       }
     };
   }, [adminAddress, mounted]);
-
-  const fetchBalance = async () => {
-    if (!adminAddress) return;
-
-    setLoading(true);
-    try {
-      const response = await fetch(
-        `/api/admin/balance?address=${adminAddress}`
-      );
-      if (response.ok) {
-        const data = await response.json();
-        setAdminBalance(data.balance);
-      }
-    } catch (error) {
-      console.error("Failed to fetch balance:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const startGasTracking = async () => {
-    setTracking(true);
-    await fetchBalance(); // Get starting balance
-
-    // Auto-stop tracking after 30 seconds
-    setTimeout(() => {
-      setTracking(false);
-    }, 30000);
-  };
 
   return (
     <Card className="w-full">
@@ -158,45 +200,40 @@ export function GasBalanceTracker() {
               </div>
             </div>
 
-            {/* Tracking Status */}
-            {tracking && (
-              <div className="flex items-center gap-2">
-                <div className="text-green-600">🔍</div>
-                <Badge
-                  variant="outline"
-                  className="text-green-700 border-green-300"
-                >
-                  Tracking Active
-                </Badge>
-              </div>
-            )}
+            {/* Auto-Update Status */}
+            <div className="flex items-center gap-2">
+              <div className="text-green-600">�</div>
+              <Badge
+                variant="outline"
+                className="text-green-700 border-green-300"
+              >
+                Auto-Updating
+              </Badge>
+              {lastUpdated && (
+                <span className="text-xs text-gray-500">
+                  Updated: {lastUpdated.toLocaleTimeString()}
+                </span>
+              )}
+            </div>
           </div>
 
-          {/* Right Section: Action Buttons */}
+          {/* Right Section: Status Info */}
           <div className="flex items-center gap-2 shrink-0">
-            <Button
-              onClick={startGasTracking}
-              disabled={tracking}
-              size="sm"
-              variant={tracking ? "secondary" : "outline"}
-              className="min-w-[100px]"
-            >
-              {tracking ? "Tracking..." : "Track Gas"}
-            </Button>
-            <Button
-              onClick={fetchBalance}
-              disabled={loading}
-              size="sm"
-              variant="outline"
-              className="min-w-[90px]"
-            >
-              {loading ? "Refreshing..." : "Refresh"}
-            </Button>
+            {loading && (
+              <Badge variant="secondary" className="animate-pulse">
+                Updating...
+              </Badge>
+            )}
           </div>
         </div>
 
         {/* Wallet Address - Collapsible on mobile */}
         <div className="mt-3 pt-3 border-t border-gray-200">
+          {error && (
+            <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+              {error}
+            </div>
+          )}
           <div className="text-xs text-muted-foreground">
             <span className="font-medium">Wallet:</span>
             <code className="ml-2 bg-gray-100 px-2 py-1 rounded font-mono break-all">

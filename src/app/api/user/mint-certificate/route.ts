@@ -1,144 +1,211 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SuiClient, getFullnodeUrl } from "@mysten/sui.js/client";
-import { TransactionBlock } from "@mysten/sui.js/transactions";
-import { Ed25519Keypair } from "@mysten/sui.js/keypairs/ed25519";
+import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
+import { Transaction } from "@mysten/sui/transactions";
+import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
+import { db } from "@/db/db";
+import { certificates as certs } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { decodeCertificateError } from "@/lib/errors/suiErrorMap";
 
 const client = new SuiClient({ url: getFullnodeUrl("devnet") });
 const PACKAGE_ID = process.env.PACKAGE_ID!;
-const CERTIFICATE_REGISTRY = process.env.CERTIFICATE_REGISTRY!;
 
 export async function POST(request: NextRequest) {
   try {
     const {
-      certificateId,
+      certificateId, // This should be the blockchain certificate object ID
       userAddress,
-      gasBudget = 6000000,
+      userPrivateKey, // User must sign the minting transaction
+      gasBudget = 10000000, // 10M MIST for minting
     } = await request.json();
 
-    // Get certificate details from your database
-    const certificateData = await getCertificateFromDB(certificateId);
+    console.log("🏷️ User minting certificate as NFT...");
+    console.log("📜 Certificate ID:", certificateId);
+    console.log("👤 User Address:", userAddress);
 
-    if (!certificateData) {
+    // Validate required parameters
+    if (!certificateId || !userAddress || !userPrivateKey) {
       return NextResponse.json(
         {
           success: false,
-          error: "Certificate not found",
+          error:
+            "Missing required parameters: certificateId, userAddress, and userPrivateKey",
         },
-        { status: 404 }
+        { status: 400 }
       );
     }
 
-    // Load issuer keypair for sponsored transaction
-    const issuerPrivateKey = process.env.ISSUER_PRIVATE_KEY!;
-    const issuerKeypair = Ed25519Keypair.fromSecretKey(
-      Buffer.from(issuerPrivateKey, "hex")
-    );
+    // Parse user private key
+    let userKeypair: Ed25519Keypair;
+    try {
+      if (userPrivateKey.startsWith("suiprivkey1")) {
+        const keyWithoutPrefix = userPrivateKey.slice(11);
+        const keyBytes = Buffer.from(keyWithoutPrefix, "base64");
+        if (keyBytes.length >= 33) {
+          const privateKeyBytes = keyBytes.slice(1, 33);
+          userKeypair = Ed25519Keypair.fromSecretKey(privateKeyBytes);
+        } else {
+          throw new Error("Invalid key length");
+        }
+      } else {
+        throw new Error("Invalid private key format");
+      }
+    } catch {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid user private key format",
+        },
+        { status: 400 }
+      );
+    }
 
-    console.log(
-      "💰 Minting certificate with sponsored transaction (6M MIST budget)"
-    );
+    // Verify the user address matches the keypair
+    const derivedAddress = userKeypair.getPublicKey().toSuiAddress();
+    if (derivedAddress !== userAddress) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "User address does not match provided private key",
+        },
+        { status: 400 }
+      );
+    }
 
-    const tx = new TransactionBlock();
+    // Create minting transaction
+    const txb = new Transaction();
+    txb.setGasBudget(gasBudget);
 
-    // Convert field data to proper format
-    const fieldNames = Object.keys(certificateData.fieldData);
-    const fieldValues = Object.values(certificateData.fieldData);
-
-    const fieldNamesBytes = fieldNames.map((name) =>
-      Array.from(new TextEncoder().encode(name))
-    );
-    const fieldValuesBytes = fieldValues.map((value) =>
-      Array.from(new TextEncoder().encode(String(value)))
-    );
-
-    // Issue certificate on-chain (issuer pays gas, user gets ownership)
-    tx.moveCall({
-      target: `${PACKAGE_ID}::certificate::issue_certificate`,
+    // Call mint_certificate_nft function
+    // Only the certificate recipient can mint (access control in smart contract)
+    txb.moveCall({
+      target: `${PACKAGE_ID}::certificate::mint_certificate_nft`,
       arguments: [
-        tx.object(certificateData.issuerCapId),
-        tx.object(certificateData.templateId),
-        tx.pure(userAddress), // User becomes the owner
-        tx.pure(fieldNamesBytes),
-        tx.pure(fieldValuesBytes),
-        tx.pure([]), // No expiry
-        tx.object(CERTIFICATE_REGISTRY),
+        txb.object(certificateId), // Certificate object to mint
+        txb.pure.address(userAddress), // Recipient address (must match certificate recipient)
+        txb.pure(new Uint8Array(new TextEncoder().encode("pending"))), // Placeholder label
       ],
     });
 
-    // Sponsored transaction: Issuer pays gas, user gets certificate
-    tx.setGasBudget(gasBudget);
+    console.log("🔗 Executing minting transaction...");
 
-    const result = await client.signAndExecuteTransactionBlock({
-      signer: issuerKeypair, // Issuer signs and pays
-      transactionBlock: tx,
+    const result = await client.signAndExecuteTransaction({
+      signer: userKeypair,
+      transaction: txb,
       options: {
+        showInput: true,
         showEffects: true,
-        showObjectChanges: true,
         showEvents: true,
+        showObjectChanges: true,
+        showBalanceChanges: true,
       },
     });
 
-    // Find the created certificate object
-    const createdCert = result.objectChanges?.find(
-      (change) =>
-        change.type === "created" &&
-        change.objectType?.includes("::certificate::Certificate")
+    // Find the minted NFT object
+    let nftId = null;
+    if (result.objectChanges) {
+      for (const change of result.objectChanges) {
+        if (
+          change.type === "created" &&
+          change.objectType?.includes("CertificateNFT")
+        ) {
+          nftId = change.objectId;
+          break;
+        }
+      }
+    }
+
+    // Extract minting events
+    const events = result.events || [];
+    const mintedEvent = events.find((event) =>
+      event.type?.includes("CertificateMintedEvent")
     );
 
-    if (createdCert && createdCert.type === "created") {
-      // Update database to mark as minted
-      await updateCertificateStatusInDB(
-        certificateId,
-        "minted",
-        createdCert.objectId
-      );
+    console.log("✅ Certificate NFT minted by user:", {
+      transactionDigest: result.digest,
+      nftId,
+      gasUsed: result.effects?.gasUsed,
+      event: mintedEvent,
+    });
 
-      return NextResponse.json({
-        success: true,
-        transactionDigest: result.digest,
-        certificateId: createdCert.objectId,
-        gasUsed: result.effects?.gasUsed,
-        message: "Certificate minted successfully via sponsored transaction",
-      });
-    } else {
-      throw new Error("Certificate creation failed");
+    // Update database to reflect minting status
+    try {
+      if (certificateId && nftId) {
+        await db
+          .update(certs)
+          .set({
+            status: "minted",
+            transactionDigest: result.digest,
+          })
+          .where(eq(certs.blockchainId, certificateId));
+
+        console.log("📝 Database updated with mint status");
+      }
+    } catch (e) {
+      console.warn("⚠️ Database mint update failed:", e);
+      // Don't fail the whole operation for DB issues
     }
+
+    // Second transaction to update mint tx id label from placeholder to real digest
+    try {
+      const followUpTxb = new Transaction();
+      followUpTxb.setGasBudget(3000000); // 3M MIST for label update
+
+      followUpTxb.moveCall({
+        target: `${PACKAGE_ID}::certificate::update_mint_tx_id`,
+        arguments: [
+          followUpTxb.object(certificateId),
+          followUpTxb.pure.address(userAddress),
+          followUpTxb.pure(
+            new Uint8Array(new TextEncoder().encode(result.digest))
+          ),
+        ],
+      });
+
+      await client.signAndExecuteTransaction({
+        signer: userKeypair,
+        transaction: followUpTxb,
+        options: { showEffects: true },
+      });
+
+      console.log("🏷️ Mint transaction label updated");
+    } catch (e) {
+      console.warn("⚠️ Mint label update failed:", e);
+      // This is not critical, continue with success response
+    }
+
+    return NextResponse.json({
+      success: true,
+      nftId,
+      certificateId,
+      transactionDigest: result.digest,
+      gasUsed: result.effects?.gasUsed,
+      userAddress,
+      event: mintedEvent,
+      message: "Certificate successfully minted as NFT and transferred to user",
+      viewOnExplorer: `https://suiexplorer.com/object/${nftId}?network=devnet`,
+      mintTxDigest: result.digest,
+    });
   } catch (error) {
-    console.error("Certificate minting failed:", error);
+    console.error("❌ User certificate minting failed:", error);
+
+    let friendlyError = "Unknown error occurred during minting";
+    if (error instanceof Error) {
+      // Check for Move abort errors
+      const match = error.message.match(/MoveAbort\((\d+)\)/);
+      if (match) {
+        friendlyError = decodeCertificateError(Number(match[1]));
+      } else {
+        friendlyError = error.message;
+      }
+    }
+
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: friendlyError,
       },
       { status: 500 }
     );
   }
-}
-
-// Helper functions for database operations
-async function getCertificateFromDB(certificateId: string) {
-  // TODO: Implement database lookup
-  // Return certificate data including issuerCapId, templateId, fieldData
-  return {
-    id: certificateId,
-    issuerCapId: "YOUR_ISSUER_CAP_ID",
-    templateId: "YOUR_TEMPLATE_ID",
-    fieldData: {
-      "Student Name": "John Doe",
-      "Course Title": "Blockchain Development",
-      Grade: "A+",
-      "Completion Date": "2025-01-08",
-    },
-  };
-}
-
-async function updateCertificateStatusInDB(
-  certificateId: string,
-  status: string,
-  onChainId?: string
-) {
-  // TODO: Implement database update
-  console.log(
-    `Updated certificate ${certificateId} to ${status}, on-chain ID: ${onChainId}`
-  );
 }

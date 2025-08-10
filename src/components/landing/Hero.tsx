@@ -1,7 +1,8 @@
 "use client";
 import { motion } from "framer-motion";
-import { Shield, Zap, Globe, ArrowRight } from "lucide-react";
+import { Shield, Zap, Globe } from "lucide-react";
 import Link from "next/link";
+import UnifiedLogin from "../UnifiedLogin";
 
 export const Hero = () => {
   return (
@@ -84,13 +85,7 @@ export const Hero = () => {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4">
-              <Link
-                href="/issue"
-                className="group px-8 py-4 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold hover:from-blue-600 hover:to-purple-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center justify-center"
-              >
-                Issue Certificate
-                <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
-              </Link>
+              <UnifiedLogin />
 
               <Link
                 href="/verify"

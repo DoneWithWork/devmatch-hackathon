@@ -9,12 +9,11 @@ import {
   Settings,
   LogOut,
   FileText,
-  Award,
   CheckSquare,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import GoogleLogin from "./GoogleLogin";
+import UnifiedLogin from "./UnifiedLogin";
 
 interface NavItem {
   name: string;
@@ -51,28 +50,16 @@ const AppNavbar = () => {
     ...(user.isLoggedIn
       ? [
           {
-            name: "Dashboard",
-            path: "/dashboard",
-            icon: User,
-            roles: ["user", "issuer", "admin"],
-          },
-          {
-            name: "My Certificates",
-            path: "/certificates",
-            icon: Award,
-            roles: ["user", "issuer", "admin"],
-          },
-          {
-            name: "Issue Certificate",
-            path: "/issue",
-            icon: FileText,
-            roles: ["issuer", "admin"],
-          },
-          {
             name: "Apply as Issuer",
             path: "/apply",
             icon: FileText,
             roles: ["user"],
+          },
+          {
+            name: "Issuer Dashboard",
+            path: "/issuer",
+            icon: Settings,
+            roles: ["issuer"],
           },
           {
             name: "Admin Panel",
@@ -80,16 +67,11 @@ const AppNavbar = () => {
             icon: Settings,
             roles: ["admin"],
           },
-          {
-            name: "Test Routes",
-            path: "/test",
-            icon: Settings,
-            roles: ["admin"],
-          },
         ]
       : [
           { name: "Apply as Issuer", path: "/apply", icon: FileText },
-          { name: "Test Routes", path: "/test", icon: Settings },
+          { name: "Issuer Login", path: "/issuer-login", icon: User },
+          { name: "Admin Panel", path: "/admin", icon: Settings },
         ]),
   ];
 
@@ -154,7 +136,7 @@ const AppNavbar = () => {
           {/* Auth Buttons */}
           <div className="hidden md:flex items-center space-x-4">
             {!user.isLoggedIn ? (
-              <GoogleLogin />
+              <UnifiedLogin />
             ) : (
               <div className="flex items-center space-x-3">
                 <div className="flex items-center px-4 py-2 rounded-lg bg-green-100/50 backdrop-blur-sm border border-green-200/50 text-green-700 font-medium">
@@ -215,7 +197,7 @@ const AppNavbar = () => {
             ))}
             <div className="pt-4 space-y-2 border-t border-white/20">
               {!user.isLoggedIn ? (
-                <GoogleLogin />
+                <UnifiedLogin />
               ) : (
                 <button
                   onClick={handleLogout}

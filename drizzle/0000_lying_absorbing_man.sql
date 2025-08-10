@@ -1,0 +1,3 @@
+-- Initial migration placeholder
+-- This migration was created to satisfy the migration system requirements
+-- The actual schema is already applied through other means

@@ -22,8 +22,21 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
-import { PlusCircle, FileText, Send, Award, ExternalLink } from "lucide-react";
+import {
+  PlusCircle,
+  FileText,
+  Send,
+  Award,
+  ExternalLink,
+  Fuel,
+  User,
+  Wallet,
+  Copy,
+} from "lucide-react";
 import { toast } from "sonner";
+import { IssuerGasTracking } from "./IssuerGasTracking";
+import { CertificateIssuanceForm } from "./CertificateIssuanceForm";
+import WalletConnect from "@/components/ui/wallet-connect";
 
 interface CertificateTemplate {
   id: string;
@@ -46,21 +59,33 @@ interface IssuedCertificate {
   nftId?: string;
 }
 
+interface UserSession {
+  id: string;
+  userAddress: string;
+  role: "issuer" | "admin" | "user";
+  maxEpoch?: number;
+  randomness?: string;
+}
+
+interface GasBalance {
+  mist: string;
+  sui: string;
+  formatted: string;
+  lastUpdated: string;
+}
+
 export function IssuerDashboard() {
   const [templates, setTemplates] = useState<CertificateTemplate[]>([]);
   const [issuedCerts, setIssuedCerts] = useState<IssuedCertificate[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<"templates" | "issued">(
-    "templates"
-  );
+  const [activeTab, setActiveTab] = useState<
+    "templates" | "issue" | "issued" | "gas"
+  >("templates");
 
-  // Issuer credentials state
-  const [issuerCredentials, setIssuerCredentials] = useState({
-    privateKey: "",
-    issuerCapId: "",
-    address: "",
-  });
-  const [showCredentialsDialog, setShowCredentialsDialog] = useState(false);
+  // User session and balance state
+  const [userSession, setUserSession] = useState<UserSession | null>(null);
+  const [gasBalance, setGasBalance] = useState<GasBalance | null>(null);
+  const [isApproved, setIsApproved] = useState(false);
 
   // Form states
   const [showCreateTemplate, setShowCreateTemplate] = useState(false);
@@ -81,88 +106,100 @@ export function IssuerDashboard() {
     fieldData: {} as Record<string, string>,
   });
 
-  const fetchTemplates = useCallback(async () => {
+  // Fetch user session and issuer status
+  const fetchUserSession = useCallback(async () => {
+    console.log("Fetching user session...");
     try {
-      const address = issuerCredentials.address || "default_issuer";
-      const response = await fetch(
-        `/api/issuer/templates?issuerAddress=${address}`
-      );
+      const response = await fetch("/api/auth/session");
+      console.log("Session response status:", response.status);
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Session data received:", data);
+        setUserSession(data);
+
+        // Check if user is an approved issuer
+        if (data?.role === "issuer") {
+          console.log("User is approved issuer");
+          setIsApproved(true);
+        } else {
+          console.log("User role:", data?.role);
+        }
+      } else {
+        console.log("Session response not ok");
+      }
+    } catch (error) {
+      console.error("Failed to fetch user session:", error);
+    }
+  }, []);
+
+  // Fetch gas balance
+  const fetchGasBalance = useCallback(async () => {
+    if (!userSession?.userAddress) return;
+
+    try {
+      const response = await fetch("/api/auth/gas-balance");
+      if (response.ok) {
+        const data = await response.json();
+        setGasBalance({
+          mist: data.balance,
+          sui: data.formatted,
+          formatted: data.formatted,
+          lastUpdated: new Date().toISOString(),
+        });
+      }
+    } catch (error) {
+      console.error("Failed to fetch gas balance:", error);
+    }
+  }, [userSession?.userAddress]);
+
+  const fetchTemplates = useCallback(async () => {
+    if (!isApproved) return;
+
+    try {
+      const response = await fetch("/api/issuer/templates");
       if (response.ok) {
         const data = await response.json();
         setTemplates(data.templates || []);
       }
     } catch (error) {
       console.error("Failed to fetch templates:", error);
+      toast.error("Failed to fetch templates");
     }
-  }, [issuerCredentials.address]);
+  }, [isApproved]);
 
   const fetchIssuedCertificates = useCallback(async () => {
+    if (!isApproved) return;
+
     try {
-      const address = issuerCredentials.address || "default_issuer";
-      const response = await fetch(
-        `/api/issuer/certificates?issuerAddress=${address}`
-      );
+      const response = await fetch("/api/issuer/certificates");
       if (response.ok) {
         const data = await response.json();
         setIssuedCerts(data.certificates || []);
       }
     } catch (error) {
       console.error("Failed to fetch issued certificates:", error);
+      toast.error("Failed to fetch issued certificates");
     }
-  }, [issuerCredentials.address]);
+  }, [isApproved]);
 
   useEffect(() => {
-    fetchTemplates();
-    fetchIssuedCertificates();
-  }, [fetchTemplates, fetchIssuedCertificates]);
+    fetchUserSession();
+  }, [fetchUserSession]);
 
-  // Load credentials from localStorage on mount
   useEffect(() => {
-    const savedCredentials = localStorage.getItem("issuerCredentials");
-    if (savedCredentials) {
-      try {
-        const parsed = JSON.parse(savedCredentials);
-        setIssuerCredentials(parsed);
-      } catch (error) {
-        console.error("Failed to parse saved credentials:", error);
-      }
+    if (userSession) {
+      fetchGasBalance();
+      fetchTemplates();
+      fetchIssuedCertificates();
     }
-  }, []);
+  }, [userSession, fetchGasBalance, fetchTemplates, fetchIssuedCertificates]);
 
-  // Create a real template on the blockchain for testing
-  const createRealTemplate = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch("/api/test/create-template", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-
-      const result = await response.json();
-      if (result.success) {
-        toast.success(`Real template created! ID: ${result.templateId}`);
-        // Add to templates list for immediate use
-        const newRealTemplate: CertificateTemplate = {
-          id: result.templateId,
-          name: "Real Blockchain Template",
-          description:
-            "A real template created on the Sui blockchain for testing",
-          fields: ["Student Name", "Course", "Grade"],
-          createdAt: new Date().toISOString(),
-          onChainId: result.templateId,
-        };
-        setTemplates((prev) => [newRealTemplate, ...prev]);
-      } else {
-        toast.error(`Failed to create real template: ${result.error}`);
-      }
-    } catch (error) {
-      toast.error("Failed to create real template");
-      console.error(error);
-    } finally {
-      setLoading(false);
+  const copyAddress = () => {
+    if (userSession?.userAddress) {
+      navigator.clipboard.writeText(userSession.userAddress);
+      toast.success("Address copied to clipboard!");
     }
   };
-
   const createTemplate = async () => {
     if (
       !newTemplate.name ||
@@ -172,36 +209,82 @@ export function IssuerDashboard() {
       toast.error("Please fill in all template fields");
       return;
     }
-
-    // Check if we have issuer credentials
-    if (!issuerCredentials.privateKey || !issuerCredentials.issuerCapId) {
-      toast.error("Please set up your issuer credentials first");
-      setShowCredentialsDialog(true);
-      return;
-    }
-
     setLoading(true);
     try {
-      const response = await fetch("/api/issuer/create-template", {
+      console.log("🔄 Starting template creation with client-side signing");
+
+      // Step 1: Get transaction bytes from server
+      const transactionResponse = await fetch("/api/issuer/create-template", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          issuerCapId: issuerCredentials.issuerCapId,
-          templateName: newTemplate.name,
+          name: newTemplate.name,
           description: newTemplate.description,
-          fields: newTemplate.fields.filter((f) => f.trim()),
-          issuerPrivateKey: issuerCredentials.privateKey,
+          attributes: newTemplate.fields.filter((f) => f.trim()),
         }),
       });
 
-      const result = await response.json();
-      if (result.success) {
-        toast.success("Template created successfully!");
-        setShowCreateTemplate(false);
-        setNewTemplate({ name: "", description: "", fields: [""] });
-        fetchTemplates();
-      } else {
-        toast.error(`Failed to create template: ${result.error}`);
+      const transactionResult = await transactionResponse.json();
+
+      if (!transactionResult.requiresSigning) {
+        toast.error(
+          `Server error: ${transactionResult.error || "Unknown error"}`
+        );
+        return;
+      }
+
+      console.log("📦 Received transaction bytes for signing");
+
+      // Step 2: Check for wallet connection
+      if (typeof window === "undefined" || !window.suiWallet) {
+        toast.error(
+          "SUI Wallet not found. Please install and connect a SUI wallet."
+        );
+        return;
+      }
+
+      // Step 3: Sign transaction with wallet
+      toast.info("Please sign the transaction in your wallet...");
+
+      try {
+        const signedTransaction = await window.suiWallet.signTransactionBlock({
+          transactionBlock: new Uint8Array(transactionResult.transactionBytes),
+        });
+
+        console.log("✅ Transaction signed successfully");
+
+        // Step 4: Submit signed transaction to server
+        const submitResponse = await fetch("/api/issuer/create-template", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: newTemplate.name,
+            description: newTemplate.description,
+            attributes: newTemplate.fields.filter((f) => f.trim()),
+            signedTransaction: {
+              transactionBlockBytes: Array.from(
+                signedTransaction.transactionBlockBytes
+              ),
+              signature: signedTransaction.signature,
+            },
+          }),
+        });
+
+        const submitResult = await submitResponse.json();
+
+        if (submitResult.success) {
+          toast.success(
+            "Template created successfully with blockchain verification!"
+          );
+          setShowCreateTemplate(false);
+          setNewTemplate({ name: "", description: "", fields: [""] });
+          fetchTemplates();
+        } else {
+          toast.error(`Failed to create template: ${submitResult.error}`);
+        }
+      } catch (walletError) {
+        console.error("Wallet signing failed:", walletError);
+        toast.error("Transaction signing failed. Please try again.");
       }
     } catch (error) {
       toast.error("Failed to create template");
@@ -216,30 +299,32 @@ export function IssuerDashboard() {
       toast.error("Please select template and recipient address");
       return;
     }
-
-    if (!issuerCredentials.privateKey || !issuerCredentials.issuerCapId) {
-      toast.error("Please set up your issuer credentials first");
-      setShowCredentialsDialog(true);
+    if (!userSession?.userAddress) {
+      toast.error("User session not found");
       return;
     }
-
     setLoading(true);
     try {
       const response = await fetch("/api/issuer/issue-certificate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          issuerCapId: issuerCredentials.issuerCapId,
           templateId: selectedTemplate.onChainId,
           recipientAddress: certForm.recipientAddress,
           fieldData: certForm.fieldData,
-          issuerPrivateKey: issuerCredentials.privateKey,
+          walletAddress: userSession.userAddress,
+          // Don't pass issuerPrivateKey from client - let API handle it
         }),
       });
 
       const result = await response.json();
       if (result.success) {
-        toast.success("Certificate issued successfully!");
+        toast.success(
+          "Certificate issued successfully!" +
+            (result.clientProvidedId
+              ? ` Link ID: ${result.clientProvidedId}`
+              : "")
+        );
         setShowIssueCert(false);
         setCertForm({ recipientAddress: "", fieldData: {} });
         setSelectedTemplate(null);
@@ -256,12 +341,6 @@ export function IssuerDashboard() {
   };
 
   const mintCertificate = async (certId: string, recipientAddress: string) => {
-    if (!issuerCredentials.privateKey) {
-      toast.error("Please set up your issuer credentials first");
-      setShowCredentialsDialog(true);
-      return;
-    }
-
     setLoading(true);
     try {
       const response = await fetch("/api/issuer/mint-certificate", {
@@ -270,8 +349,6 @@ export function IssuerDashboard() {
         body: JSON.stringify({
           certificateId: certId,
           recipientAddress,
-          recipientPrivateKey: "RECIPIENT_PRIVATE_KEY", // This would need to be handled securely
-          issuerPrivateKey: issuerCredentials.privateKey,
           payGasWithIssuer: true,
         }),
       });
@@ -312,27 +389,44 @@ export function IssuerDashboard() {
     }));
   };
 
-  const saveCredentials = () => {
-    localStorage.setItem(
-      "issuerCredentials",
-      JSON.stringify(issuerCredentials)
-    );
-    setShowCredentialsDialog(false);
-    toast.success("Credentials saved!");
+  const refreshBalance = () => {
+    fetchGasBalance();
+    toast.success("Balance refreshed!");
   };
 
-  const loadDemoCredentials = () => {
-    const demoCredentials = {
-      privateKey:
-        "suiprivkey1qqgx3p7cnw3e3dwttececgmpq5sr6yk0pf9tvllh2yxysn3wewh0jx3f3gxp",
-      issuerCapId:
-        "0xd0dc22e78582f60a8fb93521a50ab95e0ebf87db8c8e2ee79e04bd10e508fb4b",
-      address:
-        "0xfba0b09a12c7a64fe9654c404271c678825a0e9ebdf91a6361b5305018058a26",
-    };
-    setIssuerCredentials(demoCredentials);
-    toast.success("Demo credentials loaded!");
-  };
+  // Loading state
+  if (!userSession) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="text-lg font-semibold">Loading...</div>
+          <div className="text-muted-foreground">Fetching user session</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Not approved issuer state
+  if (!isApproved) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center py-12">
+          <User className="mx-auto h-12 w-12 text-muted-foreground" />
+          <h3 className="mt-4 text-lg font-semibold">Not an Approved Issuer</h3>
+          <p className="mt-2 text-muted-foreground">
+            You need to apply and be approved as an issuer to access this
+            dashboard.
+          </p>
+          <Button
+            className="mt-4"
+            onClick={() => (window.location.href = "/apply")}
+          >
+            Apply to be an Issuer
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -342,27 +436,89 @@ export function IssuerDashboard() {
           <p className="text-muted-foreground">
             Manage your certificate templates and issuances
           </p>
-          {issuerCredentials.address && (
-            <p className="text-xs text-green-600 mt-1">
-              Connected: {issuerCredentials.address.slice(0, 8)}...
-              {issuerCredentials.address.slice(-8)}
-            </p>
-          )}
+
+          {/* User Info Card */}
+          <Card className="mt-4 max-w-md">
+            <CardContent className="pt-4">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Current User</span>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      Address:
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <code className="text-xs bg-muted px-1 rounded">
+                        {userSession.userAddress.slice(0, 8)}...
+                        {userSession.userAddress.slice(-8)}
+                      </code>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={copyAddress}
+                        className="h-6 w-6 p-0"
+                      >
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Role:</span>
+                    <Badge variant="secondary" className="text-xs">
+                      {userSession.role}
+                    </Badge>
+                  </div>
+
+                  {/* Wallet Connection for Template Creation */}
+                  <div className="pt-2 border-t">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Wallet className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-xs font-medium">
+                        Wallet Connection
+                      </span>
+                    </div>
+                    <WalletConnect
+                      className="w-full"
+                      onConnect={(address) => {
+                        console.log("Wallet connected:", address);
+                        toast.success(
+                          "Wallet connected for transaction signing"
+                        );
+                      }}
+                    />
+                  </div>
+
+                  {gasBalance && (
+                    <div className="flex items-center gap-2">
+                      <Wallet className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-xs text-muted-foreground">
+                        Balance:
+                      </span>
+                      <span className="text-xs font-mono">
+                        {gasBalance.formatted}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={refreshBalance}
+                        className="h-6 w-6 p-0"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
+
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setShowCredentialsDialog(true)}
-            className={
-              !issuerCredentials.privateKey
-                ? "border-orange-500 text-orange-600"
-                : ""
-            }
-          >
-            {!issuerCredentials.privateKey
-              ? "Setup Credentials"
-              : "Update Credentials"}
-          </Button>
           <Button
             variant={activeTab === "templates" ? "default" : "outline"}
             onClick={() => setActiveTab("templates")}
@@ -371,53 +527,37 @@ export function IssuerDashboard() {
             Templates ({templates.length})
           </Button>
           <Button
+            variant={activeTab === "issue" ? "default" : "outline"}
+            onClick={() => setActiveTab("issue")}
+          >
+            <Send className="w-4 h-4 mr-2" />
+            Issue Certificates
+          </Button>
+          <Button
             variant={activeTab === "issued" ? "default" : "outline"}
             onClick={() => setActiveTab("issued")}
           >
             <Award className="w-4 h-4 mr-2" />
             Issued ({issuedCerts.length})
           </Button>
+          <Button
+            variant={activeTab === "gas" ? "default" : "outline"}
+            onClick={() => setActiveTab("gas")}
+          >
+            <Fuel className="w-4 h-4 mr-2" />
+            Gas Tracking
+          </Button>
         </div>
       </div>
 
       <Separator />
-
-      {/* Credentials Warning */}
-      {(!issuerCredentials.privateKey || !issuerCredentials.issuerCapId) && (
-        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 flex items-center gap-3">
-          <div className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center">
-            <span className="text-orange-600 text-sm">!</span>
-          </div>
-          <div className="flex-1">
-            <h3 className="font-medium text-orange-800">Setup Required</h3>
-            <p className="text-sm text-orange-700">
-              Please configure your issuer credentials to create templates and
-              issue certificates.
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowCredentialsDialog(true)}
-            className="border-orange-300 text-orange-700 hover:bg-orange-100"
-          >
-            Setup Now
-          </Button>
-        </div>
-      )}
 
       {activeTab === "templates" && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-semibold">Certificate Templates</h2>
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={createRealTemplate}
-                disabled={loading}
-              >
-                {loading ? "Creating..." : "Create Real Template"}
-              </Button>
+              {/* Removed deprecated Create Real Template test button */}
               <Dialog
                 open={showCreateTemplate}
                 onOpenChange={setShowCreateTemplate}
@@ -432,9 +572,28 @@ export function IssuerDashboard() {
                   <DialogHeader>
                     <DialogTitle>Create Certificate Template</DialogTitle>
                     <DialogDescription>
-                      Define the structure and fields for your certificates
+                      Define the structure and fields for your certificates.
+                      This will create a blockchain template that you can use to
+                      issue certificates.
                     </DialogDescription>
                   </DialogHeader>
+
+                  {/* Wallet Signing Info */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                    <div className="flex items-start gap-2">
+                      <Wallet className="h-4 w-4 text-blue-600 mt-0.5" />
+                      <div className="text-sm">
+                        <p className="font-medium text-blue-900">
+                          Wallet Signing Required
+                        </p>
+                        <p className="text-blue-700">
+                          Template creation requires blockchain verification.
+                          You&apos;ll be prompted to sign a transaction with
+                          your connected wallet.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                   <div className="space-y-6">
                     <div className="space-y-2">
                       <Label htmlFor="template-name">Template Name</Label>
@@ -627,6 +786,14 @@ export function IssuerDashboard() {
         </div>
       )}
 
+      {activeTab === "issue" && (
+        <div className="space-y-4">
+          <CertificateIssuanceForm />
+        </div>
+      )}
+
+      {activeTab === "gas" && <IssuerGasTracking />}
+
       {/* Issue Certificate Dialog */}
       <Dialog open={showIssueCert} onOpenChange={setShowIssueCert}>
         <DialogContent className="max-w-2xl">
@@ -690,81 +857,6 @@ export function IssuerDashboard() {
               </div>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Credentials Dialog */}
-      <Dialog
-        open={showCredentialsDialog}
-        onOpenChange={setShowCredentialsDialog}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Issuer Credentials</DialogTitle>
-            <DialogDescription>
-              Enter your issuer credentials to create templates and issue
-              certificates
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="private-key">Private Key</Label>
-              <Input
-                id="private-key"
-                type="password"
-                value={issuerCredentials.privateKey}
-                onChange={(e) =>
-                  setIssuerCredentials((prev) => ({
-                    ...prev,
-                    privateKey: e.target.value,
-                  }))
-                }
-                placeholder="Your Sui private key"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="issuer-cap">Issuer Cap ID</Label>
-              <Input
-                id="issuer-cap"
-                value={issuerCredentials.issuerCapId}
-                onChange={(e) =>
-                  setIssuerCredentials((prev) => ({
-                    ...prev,
-                    issuerCapId: e.target.value,
-                  }))
-                }
-                placeholder="Your issuer capability ID"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="address">Address</Label>
-              <Input
-                id="address"
-                value={issuerCredentials.address}
-                onChange={(e) =>
-                  setIssuerCredentials((prev) => ({
-                    ...prev,
-                    address: e.target.value,
-                  }))
-                }
-                placeholder="Your Sui address"
-              />
-            </div>
-            <div className="flex justify-between gap-2">
-              <Button variant="outline" onClick={loadDemoCredentials} size="sm">
-                Load Demo
-              </Button>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowCredentialsDialog(false)}
-                >
-                  Cancel
-                </Button>
-                <Button onClick={saveCredentials}>Save Credentials</Button>
-              </div>
-            </div>
-          </div>
         </DialogContent>
       </Dialog>
     </div>

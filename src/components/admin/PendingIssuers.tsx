@@ -12,10 +12,9 @@ interface PendingIssuer {
   website?: string | null;
   description: string;
   walletAddress: string;
-  status: "pending" | "success" | "rejected";
+  status: "pending" | "success" | "rejected" | "approved";
   appliedAt: string;
   createdAt: string;
-  issuerCapId?: string | null;
   transactionDigest?: string | null;
   hasBlockchainIntegration?: boolean;
 }
@@ -44,7 +43,7 @@ export function PendingIssuers() {
   const statusCounts = {
     all: pendingIssuers.length,
     pending: pendingIssuers.filter((i) => i.status === "pending").length,
-    success: pendingIssuers.filter((i) => i.status === "success").length,
+    success: pendingIssuers.filter((i) => i.status === "approved").length,
     rejected: pendingIssuers.filter((i) => i.status === "rejected").length,
   };
 
@@ -88,7 +87,7 @@ export function PendingIssuers() {
         setPendingIssuers((prev) =>
           prev.map((issuer) =>
             issuer.id === issuerId
-              ? { ...issuer, status: "success" as const }
+              ? { ...issuer, status: "approved" as const }
               : issuer
           )
         );
@@ -253,14 +252,17 @@ export function PendingIssuers() {
                   </div>
                   <div className="flex flex-col gap-2 shrink-0">
                     <Badge
-                      variant={
+                      className={
                         issuer.status === "pending"
-                          ? "secondary"
-                          : issuer.status === "success"
-                          ? "default"
-                          : "destructive"
+                          ? "bg-orange-100 text-orange-800 border-orange-200"
+                          : issuer.status === "approved"
+                          ? "bg-green-100 text-green-800 border-green-200"
+                          : "bg-red-100 text-red-800 border-red-200"
                       }
                     >
+                      {issuer.status === "pending" && "🟡 "}
+                      {issuer.status === "approved" && "🟢 "}
+                      {issuer.status === "rejected" && "🔴 "}
                       {issuer.status}
                     </Badge>
                     {issuer.hasBlockchainIntegration && (
@@ -312,16 +314,6 @@ export function PendingIssuers() {
                     <code className="bg-gray-100 px-2 py-1 rounded text-xs font-mono break-all block">
                       {issuer.walletAddress}
                     </code>
-                    {issuer.issuerCapId && (
-                      <div className="mt-2">
-                        <div className="font-medium text-gray-700 mb-1">
-                          IssuerCap ID:
-                        </div>
-                        <code className="bg-blue-50 px-2 py-1 rounded text-xs font-mono break-all block">
-                          {issuer.issuerCapId}
-                        </code>
-                      </div>
-                    )}
                     {issuer.transactionDigest && (
                       <div className="mt-2">
                         <div className="font-medium text-gray-700 mb-1">
@@ -356,6 +348,27 @@ export function PendingIssuers() {
                     >
                       {loadingStates[issuer.id] ? "Rejecting..." : "Reject"}
                     </Button>
+                  </div>
+                )}
+
+                {issuer.status === "approved" && (
+                  <div className="pt-3 border-t">
+                    <div className="flex items-center gap-2 text-green-700 bg-green-50 px-3 py-2 rounded border border-green-200">
+                      <span className="text-lg">🟢</span>
+                      <span className="font-medium">Application Approved</span>
+                      {issuer.hasBlockchainIntegration && (
+                        <span className="text-sm">(On Blockchain)</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {issuer.status === "rejected" && (
+                  <div className="pt-3 border-t">
+                    <div className="flex items-center gap-2 text-red-700 bg-red-50 px-3 py-2 rounded border border-red-200">
+                      <span className="text-lg">🔴</span>
+                      <span className="font-medium">Application Rejected</span>
+                    </div>
                   </div>
                 )}
               </div>

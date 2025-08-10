@@ -14,7 +14,7 @@ const Navbar = () => {
   const navItems = [
     { name: "Home", path: "/" },
     { name: "Dashboard", path: "/dashboard" },
-    { name: "Issue Certificate", path: "/issue" },
+    { name: "Issue Certificate", path: "/issuer" },
     { name: "Verify Certificate", path: "/verify" },
     { name: "Apply as Issuer", path: "/apply" },
     { name: "Admin", path: "/admin" },

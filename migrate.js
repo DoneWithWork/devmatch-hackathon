@@ -10,6 +10,9 @@ async function addColumns() {
     console.log("Adding transactionDigest column...");
     await sql`ALTER TABLE "application" ADD COLUMN IF NOT EXISTS "transactionDigest" text`;
 
+    console.log("Adding client_provided_id column to certificates...");
+    await sql`ALTER TABLE "certificates" ADD COLUMN IF NOT EXISTS "client_provided_id" text`;
+
     console.log("Migration completed successfully!");
   } catch (error) {
     console.error("Migration failed:", error);

@@ -115,17 +115,56 @@ export default function Page() {
           randomness,
           userAddress: zkLoginUserAddress,
         };
+
+        // Check for login intent stored during role selection
+        const loginIntentStr = localStorage.getItem("login_intent");
+        let intendedRole = "user";
+        let intendedRoute = "/dashboard";
+
+        if (loginIntentStr) {
+          try {
+            const loginIntent = JSON.parse(loginIntentStr);
+            // Check if intent is recent (within 10 minutes)
+            if (Date.now() - loginIntent.timestamp < 10 * 60 * 1000) {
+              intendedRole = loginIntent.role;
+              intendedRoute = loginIntent.route;
+            }
+            localStorage.removeItem("login_intent"); // Clean up
+          } catch (error) {
+            console.error("Failed to parse login intent:", error);
+          }
+        }
+
+        // Add role hint to the authentication request
+        const authData = {
+          ...data,
+          intendedRole,
+        };
+
         const signIn = await fetch("/api/auth", {
           headers: {
             "Content-Type": "application/json",
           },
           method: "POST",
-          body: JSON.stringify(data),
+          body: JSON.stringify(authData),
         });
         if (!signIn.ok) throw new Error("Failed to save session");
 
+        const response = await signIn.json();
         toast.success("Successfully signed in");
-        router.push("/");
+
+        // Route based on actual user role from API response
+        let finalRoute = intendedRoute;
+        if (response.role === "issuer") {
+          finalRoute = "/issuer";
+        } else if (response.role === "admin") {
+          finalRoute = "/admin";
+        } else {
+          finalRoute = "/dashboard";
+        }
+
+        // Redirect to appropriate dashboard
+        router.push(finalRoute);
       } catch {
         toast.error("Failed to create trx");
         return;

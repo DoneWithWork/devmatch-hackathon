@@ -78,6 +78,52 @@ module devmatch_nft::issuer {
 
     // ===== Admin Functions =====
 
+    /// Admin directly creates and approves an issuer (for admin approval workflow)
+    public entry fun admin_create_approved_issuer(
+        _admin_cap: &AdminCap,
+        issuer_address: address,
+        issuer_name: vector<u8>,
+        issuer_email: vector<u8>,
+        organization: vector<u8>,
+        registry: &mut IssuerRegistry,
+        ctx: &mut TxContext
+    ) {
+        let name_string = string::utf8(issuer_name);
+        let email_string = string::utf8(issuer_email);
+        let org_string = string::utf8(organization);
+        assert!(string::length(&name_string) as u64 <= MAX_NAME_LEN, E_NAME_TOO_LONG);
+        assert!(string::length(&email_string) as u64 <= MAX_EMAIL_LEN, E_EMAIL_TOO_LONG);
+        assert!(string::length(&org_string) as u64 <= MAX_ORG_LEN, E_ORG_TOO_LONG);
+        
+        // Create approved issuer capability directly
+        let issuer_cap = IssuerCap {
+            id: object::new(ctx),
+            issuer_name: name_string,
+            issuer_address,
+            issuer_email: email_string,
+            organization: org_string,
+            approved: true, // Pre-approved by admin
+            created_at: tx_context::epoch_timestamp_ms(ctx),
+            approved_at: option::some(tx_context::epoch_timestamp_ms(ctx)),
+        };
+
+        // Update registry
+        registry.total_applicants = registry.total_applicants + 1;
+        registry.approved_issuers = registry.approved_issuers + 1;
+
+        // Emit approved event
+        event::emit(IssuerApprovedEvent {
+            issuer_address,
+            issuer_name: name_string,
+            organization: org_string,
+            approved_by: tx_context::sender(ctx),
+            timestamp: tx_context::epoch_timestamp_ms(ctx),
+        });
+
+        // Transfer to the issuer
+        transfer::public_transfer(issuer_cap, issuer_address);
+    }
+
     /// Apply to become an issuer (anyone can apply)
     public entry fun apply_to_be_issuer(
         issuer_name: vector<u8>,
@@ -90,6 +136,9 @@ module devmatch_nft::issuer {
         let name_string = string::utf8(issuer_name);
         let email_string = string::utf8(issuer_email);
         let org_string = string::utf8(organization);
+        assert!(string::length(&name_string) as u64 <= MAX_NAME_LEN, E_NAME_TOO_LONG);
+        assert!(string::length(&email_string) as u64 <= MAX_EMAIL_LEN, E_EMAIL_TOO_LONG);
+        assert!(string::length(&org_string) as u64 <= MAX_ORG_LEN, E_ORG_TOO_LONG);
         
         // Create pending issuer capability (not approved yet)
         let issuer_cap = IssuerCap {
@@ -117,6 +166,19 @@ module devmatch_nft::issuer {
         transfer::public_transfer(issuer_cap, sender);
     }
 
+    /// Error codes
+    const E_ALREADY_APPROVED: u64 = 1;
+    const E_NOT_APPROVED: u64 = 2;
+    const E_REGISTRY_UNDERFLOW: u64 = 3;
+    const E_NAME_TOO_LONG: u64 = 4;
+    const E_EMAIL_TOO_LONG: u64 = 5;
+    const E_ORG_TOO_LONG: u64 = 6;
+
+    /// Limits
+    const MAX_NAME_LEN: u64 = 128;
+    const MAX_EMAIL_LEN: u64 = 256;
+    const MAX_ORG_LEN: u64 = 128;
+
     /// Admin approves an issuer application
     public entry fun approve_issuer(
         _admin_cap: &AdminCap,
@@ -124,7 +186,7 @@ module devmatch_nft::issuer {
         registry: &mut IssuerRegistry,
         ctx: &mut TxContext
     ) {
-        assert!(!issuer_cap.approved, 0); // Must not be already approved
+        assert!(!issuer_cap.approved, E_ALREADY_APPROVED); // Must not be already approved
         
         issuer_cap.approved = true;
         issuer_cap.approved_at = option::some(tx_context::epoch_timestamp_ms(ctx));
@@ -176,7 +238,8 @@ module devmatch_nft::issuer {
         registry: &mut IssuerRegistry,
         ctx: &mut TxContext
     ) {
-        assert!(issuer_cap.approved, 0); // Must be approved to revoke
+        assert!(issuer_cap.approved, E_NOT_APPROVED); // Must be approved to revoke
+        assert!(registry.approved_issuers > 0, E_REGISTRY_UNDERFLOW);
         
         issuer_cap.approved = false;
         registry.approved_issuers = registry.approved_issuers - 1;
@@ -201,6 +264,10 @@ module devmatch_nft::issuer {
 
     public fun get_issuer_info(issuer_cap: &IssuerCap): (&String, &String, &String, bool) {
         (&issuer_cap.issuer_name, &issuer_cap.issuer_email, &issuer_cap.organization, issuer_cap.approved)
+    }
+
+    public fun get_issuer_address(issuer_cap: &IssuerCap): address {
+        issuer_cap.issuer_address
     }
 
     public fun get_registry_stats(registry: &IssuerRegistry): (u64, u64) {

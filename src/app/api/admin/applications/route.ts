@@ -1,130 +1,111 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SuiClient, getFullnodeUrl } from "@mysten/sui.js/client";
-import { TransactionBlock } from "@mysten/sui.js/transactions";
-import { Ed25519Keypair } from "@mysten/sui.js/keypairs/ed25519";
 import { db } from "@/db/db";
-import { issuerApplication, users } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { users, issuerApplication } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
-// Smart contract configuration
-const client = new SuiClient({ url: getFullnodeUrl("devnet") });
-const PACKAGE_ID = process.env.PACKAGE_ID!;
-const ISSUER_REGISTRY = process.env.ISSUER_REGISTRY!;
-
+/**
+ * GET /api/admin/applications
+ * Fetch all issuer applications for admin review
+ */
 export async function GET() {
   try {
-    // Fetch applications from Neon database with proper join
-    const applications = await db
-      .select({
-        id: issuerApplication.id,
-        organizationName: issuerApplication.organizationName,
-        domain: issuerApplication.domain,
-        institution: issuerApplication.institution,
-        description: issuerApplication.description,
-        website: issuerApplication.website,
-        issuerCapId: issuerApplication.issuerCapId,
-        transactionDigest: issuerApplication.transactionDigest,
-        status: issuerApplication.status,
-        createdAt: issuerApplication.created_at,
-        updateAt: issuerApplication.update_at,
-        applicant: users.userAddress,
-        email: users.email,
-        username: users.username,
-      })
+    console.log("📧 Fetching applications from DB...");
+
+    // Get all applications with user information
+    const applicationsData = await db
+      .select()
       .from(issuerApplication)
       .leftJoin(users, eq(issuerApplication.applicant, users.id))
-      .orderBy(desc(issuerApplication.created_at));
+      .orderBy(issuerApplication.created_at);
 
-    console.log("📧 Raw applications data from DB:", applications);
+    console.log("📧 Raw applications data from DB:", applicationsData.length, "applications found");
 
-    // Transform to match frontend interface with proper email fallback
-    const transformedApplications = applications.map((app) => ({
-      id: app.id.toString(),
-      organizationName:
-        app.organizationName || app.username || "Unknown Organization",
-      contactEmail: app.email || "No email provided",
-      website: app.website || (app.domain ? `https://${app.domain}` : ""),
-      description: app.description || `${app.institution} institution`,
-      walletAddress: app.applicant || "No wallet address",
-      status: app.status as "pending" | "success" | "rejected",
-      appliedAt: app.createdAt?.toISOString() || new Date().toISOString(),
-      createdAt: app.createdAt?.toISOString() || new Date().toISOString(),
-      issuerCapId: app.issuerCapId,
-      transactionDigest: app.transactionDigest,
-      hasBlockchainIntegration: !!app.issuerCapId,
+    // Transform the data to match expected format
+    const applications = applicationsData.map((row) => ({
+      id: row.application.id.toString(),
+      organizationName: row.application.organizationName,
+      contactEmail: row.users?.email || row.application.contactEmail || "",
+      website: row.application.website ? `https://${row.application.website}` : "",
+      description: row.application.description || "",
+      walletAddress: row.users?.userAddress || "",
+      status: row.application.status,
+      appliedAt: row.application.created_at?.toISOString() || new Date().toISOString(),
+      createdAt: row.application.created_at?.toISOString() || new Date().toISOString(),
+      transactionDigest: row.application.transactionDigest,
+      hasBlockchainIntegration: false,
     }));
 
-    console.log(
-      "📧 Transformed applications with emails:",
-      transformedApplications
-    );
+    console.log("📧 Transformed applications successfully");
 
     return NextResponse.json({
       success: true,
-      applications: transformedApplications,
+      applications,
     });
   } catch (error) {
-    console.error("Error fetching applications from database:", error);
+    console.error("❌ Error in GET handler:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    const errorStack = error instanceof Error ? error.stack : "No stack trace";
+    console.error("❌ Error stack:", errorStack);
     return NextResponse.json(
-      { success: false, error: "Failed to fetch applications" },
+      {
+        success: false,
+        error: "Failed to fetch applications",
+        details: errorMessage,
+        stack: errorStack,
+      },
       { status: 500 }
     );
   }
 }
 
+/**
+ * POST /api/admin/applications
+ * Create new issuer application (FIXED VERSION - no blockchain creation)
+ */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    console.log("📝 Creating new issuer application:", body);
 
-    // Check if user already exists by wallet address OR email
-    const existingUserByWallet = await db
+    // Validate required fields
+    if (!body.organizationName || !body.walletAddress) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Organization name and wallet address are required",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Find or create user
+    const user = await db
       .select()
       .from(users)
       .where(eq(users.userAddress, body.walletAddress))
       .limit(1);
 
-    const existingUserByEmail = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, body.contactEmail))
-      .limit(1);
+    let userId: string;
 
-    let userId: number;
-
-    if (existingUserByWallet.length === 0 && existingUserByEmail.length === 0) {
-      // Create new user (no existing wallet or email)
+    if (user.length === 0) {
+      console.log("👤 Creating new user for wallet:", body.walletAddress);
       const [newUser] = await db
         .insert(users)
         .values({
           userAddress: body.walletAddress,
           email: body.contactEmail,
-          username: body.organizationName,
+          username: body.organizationName.toLowerCase().replace(/\s+/g, ""),
+          role: "user",
         })
-        .returning({ id: users.id });
+        .returning();
       userId = newUser.id;
-    } else if (existingUserByWallet.length > 0) {
-      // User exists by wallet address - update their info
-      userId = existingUserByWallet[0].id;
-      await db
-        .update(users)
-        .set({
-          email: body.contactEmail,
-          username: body.organizationName,
-        })
-        .where(eq(users.id, userId));
     } else {
-      // User exists by email - update their wallet address and username
-      userId = existingUserByEmail[0].id;
-      await db
-        .update(users)
-        .set({
-          userAddress: body.walletAddress,
-          username: body.organizationName,
-        })
-        .where(eq(users.id, userId));
+      userId = user[0].id;
+      console.log("👤 Using existing user:", userId);
     }
 
-    // Check if this wallet address already has a pending/success application
+    // Check for existing application
     const existingApplication = await db
       .select()
       .from(issuerApplication)
@@ -132,26 +113,7 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     if (existingApplication.length > 0) {
-      const status = existingApplication[0].status;
-      if (status === "pending") {
-        return NextResponse.json(
-          {
-            success: false,
-            error:
-              "You already have a pending application. Please wait for approval.",
-          },
-          { status: 409 }
-        );
-      } else if (status === "success") {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "You are already an approved issuer.",
-          },
-          { status: 409 }
-        );
-      }
-      // If rejected, allow reapplication by updating the existing record
+      console.log("📋 Updating existing application");
       const [updatedApplication] = await db
         .update(issuerApplication)
         .set({
@@ -186,106 +148,31 @@ export async function POST(request: NextRequest) {
       .insert(issuerApplication)
       .values({
         applicant: userId,
-        organizationName: body.organizationName, // Save the actual organization name
+        organizationName: body.organizationName,
         domain: body.organizationName.toLowerCase().replace(/\s+/g, "-"),
-        institution: "university", // Default to university, can be made dynamic
-        description: body.description, // Save the actual description
-        website: body.website, // Save the actual website
+        organization: body.organization || null,
+        description: body.description,
+        website: body.website,
         status: "pending",
+        // Note: transactionDigest will be null
+        // These will be created during the approval process
       })
       .returning();
 
     console.log("✅ New issuer application saved to Neon DB:", application);
 
-    // Call smart contract to create IssuerCap
-    let issuerCapId = null;
-    let transactionDigest = null;
+    // ⚠️ CRITICAL FIX: No blockchain creation during application submission
+    //
+    // PROBLEM: When admin creates blockchain assets, it becomes owned by admin,
+    // causing approval failures with ownership conflicts.
+    //
+    // SOLUTION: Skip blockchain creation during application submission.
+    // Blockchain assets will be created during approval process with proper ownership.
 
-    try {
-      console.log("🔗 Creating IssuerCap on blockchain...");
-
-      // Use admin keypair instead of temporary keypair for gas payment
-      const adminPrivateKey = process.env.ADMIN_PRIVATE_KEY!;
-      let adminKeypair: Ed25519Keypair;
-
-      // Parse the admin private key properly
-      if (adminPrivateKey.startsWith("suiprivkey1")) {
-        const keyWithoutPrefix = adminPrivateKey.slice(11);
-        const keyBytes = Buffer.from(keyWithoutPrefix, "base64");
-
-        if (keyBytes.length >= 33) {
-          const privateKeyBytes = keyBytes.slice(1, 33);
-          adminKeypair = Ed25519Keypair.fromSecretKey(privateKeyBytes);
-        } else {
-          throw new Error("Invalid admin private key format");
-        }
-      } else {
-        throw new Error("Invalid admin private key format");
-      }
-
-      console.log(
-        "💰 Using admin keypair for gas payment:",
-        adminKeypair.getPublicKey().toSuiAddress()
-      );
-
-      const txb = new TransactionBlock();
-      txb.setGasBudget(5000000); // 5M MIST
-
-      // Call apply_to_be_issuer function
-      txb.moveCall({
-        target: `${PACKAGE_ID}::issuer::apply_to_be_issuer`,
-        arguments: [
-          txb.pure(Array.from(new TextEncoder().encode(body.organizationName))),
-          txb.pure(Array.from(new TextEncoder().encode(body.contactEmail))),
-          txb.pure(Array.from(new TextEncoder().encode(body.organizationName))), // organization
-          txb.object(ISSUER_REGISTRY),
-        ],
-      });
-
-      const result = await client.signAndExecuteTransactionBlock({
-        signer: adminKeypair, // Use admin keypair instead of temp keypair
-        transactionBlock: txb,
-        options: {
-          showInput: true,
-          showEffects: true,
-          showEvents: true,
-          showObjectChanges: true,
-        },
-      });
-
-      transactionDigest = result.digest;
-
-      // Find the created IssuerCap object
-      if (result.objectChanges) {
-        for (const change of result.objectChanges) {
-          if (
-            change.type === "created" &&
-            change.objectType.includes("IssuerCap")
-          ) {
-            issuerCapId = change.objectId;
-            break;
-          }
-        }
-      }
-
-      console.log("✅ IssuerCap created successfully:", {
-        transactionDigest,
-        issuerCapId,
-      });
-
-      // Update the application with blockchain data
-      await db
-        .update(issuerApplication)
-        .set({
-          issuerCapId,
-          transactionDigest,
-        })
-        .where(eq(issuerApplication.id, application.id));
-    } catch (error) {
-      console.error("❌ Failed to create IssuerCap on blockchain:", error);
-      // Continue without blockchain integration for now
-      console.log("📝 Continuing with database-only application...");
-    }
+    console.log(
+      "⏭️ Skipping blockchain asset creation to avoid ownership issues"
+    );
+    console.log("💡 Blockchain assets will be created during approval process");
 
     return NextResponse.json({
       success: true,
@@ -297,24 +184,18 @@ export async function POST(request: NextRequest) {
         description: body.description,
         walletAddress: body.walletAddress,
         status: "pending",
-        appliedAt: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
-        issuerCapId,
-        transactionDigest,
+        appliedAt: application.submittedAt.toISOString(),
+        createdAt: application.created_at.toISOString(),
+        transactionDigest: null,
+        hasBlockchainIntegration: false,
       },
-      message: issuerCapId
-        ? "Application submitted successfully with blockchain integration"
-        : "Application submitted successfully (database only)",
-      blockchain: {
-        enabled: !!issuerCapId,
-        issuerCapId,
-        transactionDigest,
-      },
+      message:
+        "Application submitted successfully! Blockchain integration will be completed during approval.",
     });
   } catch (error) {
-    console.error("Error saving application to database:", error);
+    console.error("❌ Error creating issuer application:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to save application" },
+      { success: false, error: "Failed to create application" },
       { status: 500 }
     );
   }

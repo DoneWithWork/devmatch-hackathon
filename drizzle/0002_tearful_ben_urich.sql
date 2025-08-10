@@ -1,0 +1,2 @@
+-- Column already exists from manual migration, so this is a no-op
+-- ALTER TABLE "certificates" ADD COLUMN "client_provided_id" text;

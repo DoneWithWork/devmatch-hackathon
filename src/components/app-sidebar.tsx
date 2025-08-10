@@ -1,4 +1,4 @@
-import { Calendar, Home, Inbox, Search, Settings } from "lucide-react";
+import { Shield, Users, Activity, FileText, Database } from "lucide-react";
 
 import {
   Sidebar,
@@ -11,41 +11,41 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
-// Menu items.
+// Admin menu items.
 const items = [
   {
-    title: "Home",
-    url: "#",
-    icon: Home,
+    title: "Dashboard",
+    url: "/admin",
+    icon: Shield,
   },
   {
-    title: "Inbox",
-    url: "#",
-    icon: Inbox,
+    title: "System Status",
+    url: "/admin#system",
+    icon: Activity,
   },
   {
-    title: "Calendar",
-    url: "#",
-    icon: Calendar,
+    title: "Issuer Management",
+    url: "/admin#issuers",
+    icon: Users,
   },
   {
-    title: "Search",
-    url: "#",
-    icon: Search,
+    title: "Monitoring",
+    url: "/admin#monitoring",
+    icon: Database,
   },
   {
-    title: "Settings",
-    url: "#",
-    icon: Settings,
+    title: "API Documentation",
+    url: "/test",
+    icon: FileText,
   },
 ];
 
 export function AppSidebar() {
   return (
-    <Sidebar>
+    <Sidebar className="glass-container">
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Application</SidebarGroupLabel>
+          <SidebarGroupLabel>Admin Panel</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {items.map((item) => (

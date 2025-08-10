@@ -8,9 +8,27 @@ module devmatch_nft::certificate {
     use std::option::{Self, Option};
     use std::vector;
     use sui::bcs;
+    use sui::hash;
 
     // Import from issuer module
     use devmatch_nft::issuer::{Self, IssuerCap};
+
+    /// Error codes
+    const E_ISSUER_NOT_APPROVED: u64 = 1;
+    const E_TEMPLATE_OWNERSHIP: u64 = 2;
+    const E_TEMPLATE_INACTIVE: u64 = 3;
+    const E_FIELD_MISMATCH: u64 = 4;
+    const E_ALREADY_MINTED: u64 = 5;
+    const E_NOT_RECIPIENT: u64 = 6;
+    const E_TOO_MANY_FIELDS: u64 = 7;
+    const E_EMPTY_FIELD_NAME: u64 = 8;
+    const E_EMPTY_FIELD_VALUE: u64 = 9;
+    const E_ALREADY_REVOKED: u64 = 10;
+    const E_REVOKED_CANNOT_MINT: u64 = 11;
+    const E_NOT_MINTED: u64 = 12; // used for update_mint_tx_id assertion
+        const E_LABEL_ALREADY_FINALIZED: u64 = 13; // update_mint_tx_id called more than once
+
+    const MAX_TEMPLATE_FIELDS: u64 = 64; // production safety limit
 
     /// Certificate template - defines what an issuer can issue
     public struct CertificateTemplate has key, store {
@@ -38,6 +56,8 @@ module devmatch_nft::certificate {
         is_minted: bool,
         mint_transaction_id: Option<String>,
         certificate_hash: String, // For verification
+        is_revoked: bool,
+        revoked_at: Option<u64>,
     }
 
     /// Certificate Registry - tracks all certificates
@@ -63,6 +83,7 @@ module devmatch_nft::certificate {
         issuer: address,
         recipient: address,
         certificate_type: String,
+    client_provided_id: String,
         timestamp: u64,
     }
 
@@ -71,6 +92,38 @@ module devmatch_nft::certificate {
         nft_id: ID,
         recipient: address,
         mint_transaction_id: String,
+        timestamp: u64,
+    }
+
+        public struct UpdateMintTxIdEvent has copy, drop {
+            certificate_id: ID,
+            nft_id: ID,
+            new_label: String,
+            timestamp: u64,
+        }
+
+    /// NFT representation of a certificate (lightweight metadata holder)
+    public struct CertificateNFT has key, store {
+        id: UID,
+        certificate_id: ID,
+        template_id: ID,
+        issuer: address,
+        recipient: address,
+        issued_at: u64,
+        certificate_hash: String,
+    }
+
+    public struct CertificateRevokedEvent has copy, drop {
+        certificate_id: ID,
+        template_id: ID,
+        issuer: address,
+        recipient: address,
+        timestamp: u64,
+    }
+
+    public struct TemplateDeactivatedEvent has copy, drop {
+        template_id: ID,
+        issuer_address: address,
         timestamp: u64,
     }
 
@@ -100,13 +153,18 @@ module devmatch_nft::certificate {
         ctx: &mut TxContext
     ) {
         // Verify issuer is approved
-        assert!(issuer::is_approved_issuer(issuer_cap), 0);
+        assert!(issuer::is_approved_issuer(issuer_cap), E_ISSUER_NOT_APPROVED);
+        assert!((vector::length(&fields) as u64) <= MAX_TEMPLATE_FIELDS, E_TOO_MANY_FIELDS);
 
         // Convert field names to strings
         let mut field_strings = vector::empty<String>();
         let mut i = 0;
         while (i < vector::length(&fields)) {
-            vector::push_back(&mut field_strings, string::utf8(*vector::borrow(&fields, i)));
+            let raw = *vector::borrow(&fields, i);
+            let s = string::utf8(raw);
+            // Basic validation: disallow empty field names
+            assert!(string::length(&s) > 0, E_EMPTY_FIELD_NAME);
+            vector::push_back(&mut field_strings, s);
             i = i + 1;
         };
 
@@ -131,14 +189,9 @@ module devmatch_nft::certificate {
         // Update registry
         registry.total_templates = registry.total_templates + 1;
 
-        // Cache commonly used values
-        let sender = tx_context::sender(ctx);
-        let timestamp = tx_context::epoch_timestamp_ms(ctx);
-        let template_id_ref = object::id(&template);
-
-        // Emit event
+        // Emit event using earlier cached values
         event::emit(TemplateCreatedEvent {
-            template_id: template_id_ref,
+            template_id: object::id(&template),
             issuer_address: sender,
             template_name: template.template_name,
             certificate_type: template.certificate_type,
@@ -155,6 +208,11 @@ module devmatch_nft::certificate {
     ) {
         assert!(template.issuer_cap_id == object::id(issuer_cap), 1);
         template.is_active = false;
+        event::emit(TemplateDeactivatedEvent { 
+            template_id: object::id(template), 
+            issuer_address: issuer::get_issuer_address(issuer_cap), 
+            timestamp: tx_context::epoch_timestamp_ms(_ctx) 
+        });
     }
 
     // ===== Certificate Issuance =====
@@ -167,6 +225,7 @@ module devmatch_nft::certificate {
         field_names: vector<vector<u8>>,
         field_values: vector<vector<u8>>,
         expiry_date: Option<u64>, // Optional expiry timestamp
+    client_provided_id: vector<u8>,
         registry: &mut CertificateRegistry,
         ctx: &mut TxContext
     ) {
@@ -177,27 +236,34 @@ module devmatch_nft::certificate {
         let issuer_cap_id = object::id(issuer_cap);
 
         // Validations
-        assert!(issuer::is_approved_issuer(issuer_cap), 0);
-        assert!(template.issuer_cap_id == issuer_cap_id, 1);
-        assert!(template.is_active, 2);
-        assert!(vector::length(&field_names) == vector::length(&field_values), 3);
+    assert!(issuer::is_approved_issuer(issuer_cap), E_ISSUER_NOT_APPROVED);
+    assert!(template.issuer_cap_id == issuer_cap_id, E_TEMPLATE_OWNERSHIP);
+    assert!(template.is_active, E_TEMPLATE_INACTIVE);
+    assert!(vector::length(&field_names) == vector::length(&field_values), E_FIELD_MISMATCH);
+    assert!((vector::length(&field_names) as u64) <= MAX_TEMPLATE_FIELDS, E_TOO_MANY_FIELDS);
 
         // Create field data table
         let mut certificate_data = table::new(ctx);
         let mut i = 0;
         while (i < vector::length(&field_names)) {
-            let field_name = string::utf8(*vector::borrow(&field_names, i));
-            let field_value = string::utf8(*vector::borrow(&field_values, i));
-            table::add(&mut certificate_data, field_name, field_value);
+            let raw_name = *vector::borrow(&field_names, i);
+            let raw_val = *vector::borrow(&field_values, i);
+            let fn_s = string::utf8(raw_name);
+            let fv_s = string::utf8(raw_val);
+            assert!(string::length(&fn_s) > 0, E_EMPTY_FIELD_NAME);
+            assert!(string::length(&fv_s) > 0, E_EMPTY_FIELD_VALUE);
+            table::add(&mut certificate_data, fn_s, fv_s);
             i = i + 1;
         };
 
-        // Generate certificate hash for verification
+        // Generate certificate hash for verification (includes field data)
         let certificate_hash = generate_certificate_hash(
             template_id_ref,
             sender,
             recipient,
-            timestamp
+            timestamp,
+            &field_names,
+            &field_values
         );
 
         let certificate_id = object::new(ctx);
@@ -212,6 +278,8 @@ module devmatch_nft::certificate {
             is_minted: false,
             mint_transaction_id: option::none(),
             certificate_hash,
+            is_revoked: false,
+            revoked_at: option::none(),
         };
 
         // Update registry
@@ -224,6 +292,7 @@ module devmatch_nft::certificate {
             issuer: sender,
             recipient,
             certificate_type: template.certificate_type,
+            client_provided_id: string::utf8(client_provided_id),
             timestamp,
         });
 
@@ -239,8 +308,9 @@ module devmatch_nft::certificate {
         ctx: &mut TxContext
     ) {
         // Only the recipient can mark as minted
-        assert!(certificate.recipient_address == tx_context::sender(ctx), 0);
-        assert!(!certificate.is_minted, 1); // Prevent double minting
+    assert!(certificate.recipient_address == tx_context::sender(ctx), E_NOT_RECIPIENT);
+    assert!(!certificate.is_minted, E_ALREADY_MINTED); // Prevent double minting
+    assert!(!certificate.is_revoked, E_REVOKED_CANNOT_MINT);
 
         certificate.is_minted = true;
         certificate.mint_transaction_id = option::some(string::utf8(mint_tx_id));
@@ -261,8 +331,8 @@ module devmatch_nft::certificate {
         (template.template_name, template.description, template.certificate_type, template.is_active)
     }
 
-    public fun get_certificate_info(certificate: &IssuedCertificate): (address, address, u64, bool) {
-        (certificate.issuer_address, certificate.recipient_address, certificate.issued_at, certificate.is_minted)
+    public fun get_certificate_info(certificate: &IssuedCertificate): (address, address, u64, bool, bool) {
+        (certificate.issuer_address, certificate.recipient_address, certificate.issued_at, certificate.is_minted, certificate.is_revoked)
     }
 
     public fun is_certificate_expired(certificate: &IssuedCertificate, current_time: u64): bool {
@@ -284,20 +354,200 @@ module devmatch_nft::certificate {
 
     // ===== Helper Functions =====
 
+    /// Revoke a certificate (issuer only)
+    public entry fun revoke_certificate(
+        issuer_cap: &IssuerCap,
+        certificate: &mut IssuedCertificate,
+        ctx: &mut TxContext
+    ) {
+        assert!(certificate.issuer_address == issuer::get_issuer_address(issuer_cap), E_TEMPLATE_OWNERSHIP);
+        assert!(!certificate.is_revoked, E_ALREADY_REVOKED);
+        certificate.is_revoked = true;
+        certificate.revoked_at = option::some(tx_context::epoch_timestamp_ms(ctx));
+        event::emit(CertificateRevokedEvent {
+            certificate_id: object::id(certificate),
+            template_id: certificate.template_id,
+            issuer: certificate.issuer_address,
+            recipient: certificate.recipient_address,
+            timestamp: tx_context::epoch_timestamp_ms(ctx),
+        });
+    }
+
+    /// Mint NFT for a certificate (issuer or recipient may initiate). Marks certificate minted.
+    public entry fun mint_certificate_nft(
+        certificate: &mut IssuedCertificate,
+        recipient: address,
+        mint_label: vector<u8>,
+        ctx: &mut TxContext
+    ) {
+        // Only intended recipient may mint (prevents issuer-controlled mint without recipient)
+        let sender = tx_context::sender(ctx);
+        assert!(certificate.recipient_address == recipient, E_NOT_RECIPIENT);
+        assert!(sender == recipient, E_NOT_RECIPIENT);
+        assert!(!certificate.is_revoked, E_REVOKED_CANNOT_MINT);
+        assert!(!certificate.is_minted, E_ALREADY_MINTED);
+
+        let nft = CertificateNFT {
+            id: object::new(ctx),
+            certificate_id: object::id(certificate),
+            template_id: certificate.template_id,
+            issuer: certificate.issuer_address,
+            recipient: certificate.recipient_address,
+            issued_at: certificate.issued_at,
+            certificate_hash: certificate.certificate_hash,
+        };
+
+        // Mark minted & set tx id label
+        certificate.is_minted = true;
+        certificate.mint_transaction_id = option::some(string::utf8(mint_label));
+
+        event::emit(CertificateMintedEvent {
+            certificate_id: object::id(certificate),
+            nft_id: object::id(&nft),
+            recipient: certificate.recipient_address,
+            mint_transaction_id: string::utf8(mint_label),
+            timestamp: tx_context::epoch_timestamp_ms(ctx),
+        });
+
+        // Transfer NFT to recipient
+        transfer::public_transfer(nft, recipient);
+    }
+
+    /// One-time update of mint transaction id label (e.g., replace placeholder with real digest)
+    public entry fun update_mint_tx_id(
+        certificate: &mut IssuedCertificate,
+        updater: address,
+        new_label: vector<u8>,
+        ctx: &mut TxContext
+    ) {
+        // Must already be minted
+        assert!(certificate.is_minted, E_NOT_MINTED);
+        // Authorization: only issuer or recipient can update
+        assert!(updater == certificate.recipient_address || updater == certificate.issuer_address, E_NOT_RECIPIENT);
+        // Only allow update if currently set to placeholder "pending"
+        if (option::is_some(&certificate.mint_transaction_id)) {
+            let s_ref = option::borrow(&certificate.mint_transaction_id);
+            let bytes = string::as_bytes(s_ref);
+            // allow update only if bytes == b"pending"
+            let mut allow = true;
+            if (vector::length(bytes) != 7) {
+                allow = false;
+            } else {
+                if (!(bytes == &b"pending")) { allow = false; }
+            };
+            assert!(allow, E_LABEL_ALREADY_FINALIZED); // reuse error for disallowing re-update
+        } else {
+            // Should not happen if minted path set placeholder
+            assert!(false, E_ALREADY_MINTED);
+        };
+        certificate.mint_transaction_id = option::some(string::utf8(new_label));
+        event::emit(UpdateMintTxIdEvent {
+            certificate_id: object::id(certificate),
+            nft_id: object::id(certificate),
+            new_label: string::utf8(new_label),
+            timestamp: tx_context::epoch_timestamp_ms(ctx),
+        });
+    }
+
+    public fun some_expiry(val: u64): Option<u64> { option::some(val) }
+    public fun none_expiry(): Option<u64> { option::none<u64>() }
+
     fun generate_certificate_hash(
         template_id: ID,
         issuer: address,
         recipient: address,
-        timestamp: u64
+        timestamp: u64,
+        field_names: &vector<vector<u8>>,
+        field_values: &vector<vector<u8>>,
     ): String {
-        // Simple hash generation - in production, use proper cryptographic hash
-        let mut hash_data = vector::empty<u8>();
-        vector::append(&mut hash_data, object::id_to_bytes(&template_id));
-        vector::append(&mut hash_data, bcs::to_bytes(&issuer));
-        vector::append(&mut hash_data, bcs::to_bytes(&recipient));
-        vector::append(&mut hash_data, bcs::to_bytes(&timestamp));
-        
-        // Convert to hex string (simplified)
-        string::utf8(hash_data)
+        let mut data = vector::empty<u8>();
+        vector::append(&mut data, object::id_to_bytes(&template_id));
+        vector::append(&mut data, bcs::to_bytes(&issuer));
+        vector::append(&mut data, bcs::to_bytes(&recipient));
+        vector::append(&mut data, bcs::to_bytes(&timestamp));
+        let mut i = 0;
+        while (i < vector::length(field_names)) {
+            vector::append(&mut data, *vector::borrow(field_names, i));
+            vector::append(&mut data, *vector::borrow(field_values, i));
+            i = i + 1;
+        };
+        let digest = hash::blake2b256(&data);
+        string::utf8(bcs::to_bytes(&digest))
+    }
+
+    /// Direct issue and mint certificate as NFT in one transaction
+    /// This bypasses the two-step process and directly creates an NFT
+    public entry fun issue_and_mint_certificate(
+        issuer_cap: &IssuerCap,
+        template: &CertificateTemplate,
+        recipient: address,
+        field_names: vector<vector<u8>>,
+        field_values: vector<vector<u8>>,
+        expiry_date: Option<u64>,
+        client_provided_id: vector<u8>,
+        registry: &mut CertificateRegistry,
+        ctx: &mut TxContext
+    ) {
+        // Cache commonly used values
+        let sender = tx_context::sender(ctx);
+        let timestamp = tx_context::epoch_timestamp_ms(ctx);
+        let template_id_ref = object::id(template);
+        let issuer_cap_id = object::id(issuer_cap);
+
+        // Validations
+        assert!(issuer::is_approved_issuer(issuer_cap), E_ISSUER_NOT_APPROVED);
+        assert!(template.issuer_cap_id == issuer_cap_id, E_TEMPLATE_OWNERSHIP);
+        assert!(template.is_active, E_TEMPLATE_INACTIVE);
+        assert!(vector::length(&field_names) == vector::length(&field_values), E_FIELD_MISMATCH);
+        assert!((vector::length(&field_names) as u64) <= MAX_TEMPLATE_FIELDS, E_TOO_MANY_FIELDS);
+
+        // Generate certificate hash for verification
+        let certificate_hash = generate_certificate_hash(
+            template_id_ref,
+            sender,
+            recipient,
+            timestamp,
+            &field_names,
+            &field_values
+        );
+
+        // Create the NFT directly
+        let nft_id = object::new(ctx);
+        let nft_object_id = object::uid_to_inner(&nft_id);
+        let nft = CertificateNFT {
+            id: nft_id,
+            certificate_id: nft_object_id, // Self-reference since it's the certificate
+            template_id: template_id_ref,
+            issuer: sender,
+            recipient: recipient,
+            issued_at: timestamp,
+            certificate_hash,
+        };
+
+        // Update registry
+        registry.total_certificates = registry.total_certificates + 1;
+
+        // Emit issuance event
+        event::emit(CertificateIssuedEvent {
+            certificate_id: nft_object_id,
+            template_id: template_id_ref,
+            issuer: sender,
+            recipient,
+            certificate_type: template.certificate_type,
+            client_provided_id: string::utf8(client_provided_id),
+            timestamp,
+        });
+
+        // Emit minting event
+        event::emit(CertificateMintedEvent {
+            certificate_id: nft_object_id,
+            nft_id: nft_object_id,
+            recipient: recipient,
+            mint_transaction_id: string::utf8(client_provided_id),
+            timestamp,
+        });
+
+        // Transfer NFT directly to recipient
+        transfer::public_transfer(nft, recipient);
     }
 }

@@ -1,0 +1,7 @@
+{
+  "organizationName": "Test Fix Verification",
+  "contactEmail": "testfix@example.com",
+  "website": "testfix.com",
+  "description": "Testing if ownership issue is resolved",
+  "walletAddress": "0xabcdef1234567890abcdef1234567890abcdef12"
+}

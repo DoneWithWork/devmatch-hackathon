@@ -1,180 +1,313 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SuiClient, getFullnodeUrl } from "@mysten/sui.js/client";
-import { TransactionBlock } from "@mysten/sui.js/transactions";
-import { Ed25519Keypair } from "@mysten/sui.js/keypairs/ed25519";
 import { db } from "@/db/db";
-import { issuerApplication } from "@/db/schema";
-import { eq } from "drizzle-orm";
-
-// Smart contract configuration
-const client = new SuiClient({ url: getFullnodeUrl("devnet") });
-const PACKAGE_ID = process.env.PACKAGE_ID!;
-const ADMIN_CAP = process.env.ADMIN_CAP!;
-const ISSUER_REGISTRY = process.env.ISSUER_REGISTRY!;
+import { issuers, issuerApplication, users } from "@/db/schema";
+import { eq, and } from "drizzle-orm";
+import { SuiClient } from "@mysten/sui/client";
+import { Transaction } from "@mysten/sui/transactions";
+import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
+import { fromBase64 } from "@mysten/sui/utils";
 
 export async function POST(request: NextRequest) {
   try {
-    const { issuerId, walletAddress, gasBudget } = await request.json();
+    const { applicationId, issuerId } = await request.json();
 
-    console.log("🎯 Target wallet address:", walletAddress);
-    console.log("📝 Approving issuer with smart contract integration...");
-    console.log("⛽ Gas budget:", gasBudget || "using default");
+    // Environment variable access
+    const privateKey = process.env.ADMIN_PRIVATE_KEY!;
+    const packageId = process.env.NEXT_PUBLIC_PACKAGE_ID!;
+    const adminCapId = process.env.ADMIN_CAP!;
 
-    // First, get the application details including IssuerCap ID
-    const application = await db
-      .select()
-      .from(issuerApplication)
-      .where(eq(issuerApplication.id, parseInt(issuerId)))
-      .limit(1);
-
-    if (application.length === 0) {
-      throw new Error("Application not found");
-    }
-
-    const app = application[0];
-    const issuerCapId = app.issuerCapId;
-
-    console.log("📋 Application details:", {
-      id: app.id,
-      issuerCapId,
-      transactionDigest: app.transactionDigest,
-    });
-
-    let transactionDigest = null;
-    let gasUsed = null;
-
-    // Only proceed with smart contract if IssuerCap exists
-    if (issuerCapId) {
-      try {
-        console.log("🔗 Calling approve_issuer smart contract...");
-
-        // Load admin keypair from environment private key
-        const adminPrivateKey = process.env.ADMIN_PRIVATE_KEY!;
-        let adminKeypair: Ed25519Keypair;
-
-        // Parse the private key properly
-        try {
-          // The private key from .env is in format "suiprivkey1..."
-          if (adminPrivateKey.startsWith("suiprivkey1")) {
-            // For Sui private keys, extract the raw bytes
-            const keyWithoutPrefix = adminPrivateKey.slice(11); // Remove 'suiprivkey1' prefix
-            const keyBytes = Buffer.from(keyWithoutPrefix, "base64");
-
-            // Skip the algorithm flag (first byte) and take the 32-byte private key
-            if (keyBytes.length >= 33) {
-              const privateKeyBytes = keyBytes.slice(1, 33); // Skip flag, take 32 bytes
-              adminKeypair = Ed25519Keypair.fromSecretKey(privateKeyBytes);
-            } else {
-              throw new Error(
-                "Invalid private key format - insufficient bytes"
-              );
-            }
-          } else {
-            // If it's already raw bytes or hex, try to parse directly
-            const secretKeyBytes =
-              typeof adminPrivateKey === "string"
-                ? Buffer.from(adminPrivateKey, "hex")
-                : adminPrivateKey;
-            adminKeypair = Ed25519Keypair.fromSecretKey(secretKeyBytes);
-          }
-          console.log(
-            "✅ Using admin keypair, address:",
-            adminKeypair.getPublicKey().toSuiAddress()
-          );
-        } catch (error) {
-          console.error("❌ Failed to parse admin private key:", error);
-          console.warn("⚠️  Falling back to generated keypair for testing");
-          adminKeypair = Ed25519Keypair.generate();
-        }
-
-        const txb = new TransactionBlock();
-        // Use gas budget from request or default to 3.5M MIST (tested optimal)
-        const finalGasBudget = gasBudget || 3500000;
-        txb.setGasBudget(finalGasBudget);
-        console.log("⛽ Setting gas budget to:", finalGasBudget, "MIST");
-
-        // Call approve_issuer function
-        txb.moveCall({
-          target: `${PACKAGE_ID}::issuer::approve_issuer`,
-          arguments: [
-            txb.object(ADMIN_CAP), // AdminCap
-            txb.object(issuerCapId), // IssuerCap (now we have it!)
-            txb.object(ISSUER_REGISTRY), // IssuerRegistry
-          ],
-        });
-
-        const result = await client.signAndExecuteTransactionBlock({
-          signer: adminKeypair,
-          transactionBlock: txb,
-          options: {
-            showInput: true,
-            showEffects: true,
-            showEvents: true,
-            showObjectChanges: true,
-            showBalanceChanges: true,
-          },
-        });
-
-        transactionDigest = result.digest;
-        gasUsed = result.effects?.gasUsed;
-
-        console.log("✅ Smart contract approval successful:", {
-          transactionDigest,
-          gasUsed,
-          balanceChanges: result.balanceChanges,
-          adminAddress: adminKeypair.getPublicKey().toSuiAddress(),
-        });
-      } catch (blockchainError) {
-        console.error("❌ Blockchain approval failed:", blockchainError);
-        // Continue with database update even if blockchain fails
-        console.log("📝 Continuing with database-only approval...");
-      }
-    } else {
-      console.log("⚠️  No IssuerCap found, using database-only approval");
-    }
-
-    // Update the application status in the database
-    const updatedApplication = await db
-      .update(issuerApplication)
-      .set({
-        status: "success",
-        // Update transaction digest if we have a new one from approval
-        ...(transactionDigest && { transactionDigest }),
-      })
-      .where(eq(issuerApplication.id, parseInt(issuerId)))
-      .returning();
-
-    console.log("✅ Application status updated:", updatedApplication);
-
-    return NextResponse.json({
-      success: true,
-      issuerId,
-      walletAddress,
-      message: transactionDigest
-        ? "Issuer approved successfully on blockchain"
-        : "Issuer approved successfully (database only)",
-      refreshGasBalance: true,
-      blockchain: {
-        enabled: !!transactionDigest,
-        transactionDigest,
-        gasUsed,
-        issuerCapId,
-      },
-      contractAddresses: {
-        packageId: PACKAGE_ID,
-        adminCap: ADMIN_CAP,
-        issuerRegistry: ISSUER_REGISTRY,
-      },
-    });
-  } catch (error) {
-    console.error("❌ Issuer approval failed:", error);
-
-    return NextResponse.json(
-      {
+    if (!privateKey || !packageId || !adminCapId) {
+      return NextResponse.json({
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
+        error: "Missing environment configuration",
+      });
+    }
+
+    // Get the specific pending application by ID (accept both applicationId and issuerId)
+    const targetId = applicationId || issuerId;
+    let pendingApplication;
+
+    if (targetId) {
+      pendingApplication = await db
+        .select({
+          id: issuerApplication.id,
+          applicant: issuerApplication.applicant,
+          organizationName: issuerApplication.organizationName,
+          contactEmail: issuerApplication.contactEmail,
+          website: issuerApplication.website,
+          status: issuerApplication.status,
+          blockchainAddress: issuerApplication.blockchainAddress,
+          userAddress: users.userAddress, // Get the actual wallet address
+        })
+        .from(issuerApplication)
+        .leftJoin(users, eq(issuerApplication.applicant, users.id))
+        .where(
+          and(
+            eq(issuerApplication.id, parseInt(targetId)),
+            eq(issuerApplication.status, "pending")
+          )
+        )
+        .limit(1);
+    } else {
+      // Fallback: get any pending application
+      pendingApplication = await db
+        .select({
+          id: issuerApplication.id,
+          applicant: issuerApplication.applicant,
+          organizationName: issuerApplication.organizationName,
+          contactEmail: issuerApplication.contactEmail,
+          website: issuerApplication.website,
+          status: issuerApplication.status,
+          blockchainAddress: issuerApplication.blockchainAddress,
+          userAddress: users.userAddress,
+        })
+        .from(issuerApplication)
+        .leftJoin(users, eq(issuerApplication.applicant, users.id))
+        .where(eq(issuerApplication.status, "pending"))
+        .limit(1);
+    }
+
+    if (pendingApplication.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: "No pending issuer application found.",
+      });
+    }
+
+    const application = pendingApplication[0];
+
+    console.log("📋 Processing approval for application:", application.id);
+
+    // Initialize Sui client and keypair
+    const client = new SuiClient({ url: "https://fullnode.devnet.sui.io:443" });
+
+    // Handle Sui private key format - Try multiple methods
+    let keypair: Ed25519Keypair;
+    if (privateKey.startsWith("suiprivkey1")) {
+      try {
+        // Method 1: Try using the SDK's direct import
+        keypair = Ed25519Keypair.fromSecretKey(privateKey);
+        console.log("✅ SDK direct import worked");
+      } catch (sdkError) {
+        console.log("❌ SDK direct import failed:", sdkError);
+        try {
+          // Method 2: Try decoding and using as-is
+          const fullDecoded = fromBase64(privateKey.slice(11));
+          keypair = Ed25519Keypair.fromSecretKey(fullDecoded);
+          console.log("✅ Full decoded import worked");
+        } catch (fullError) {
+          console.log("❌ Full decoded import failed:", fullError);
+          // Method 3: Manual parsing (current approach)
+          const decoded = fromBase64(privateKey.slice(11));
+          const privateKeyBytes = decoded.slice(1, 33); // Skip flag, take 32 bytes
+          keypair = Ed25519Keypair.fromSecretKey(privateKeyBytes);
+          console.log("✅ Using manual parsing as fallback");
+        }
+      }
+
+      const derivedAddress = keypair.getPublicKey().toSuiAddress();
+      console.log("🔍 Address verification:");
+      console.log("  Expected:", process.env.ADMIN_ADDRESS);
+      console.log("  Derived: ", derivedAddress);
+      console.log("  Match:   ", derivedAddress === process.env.ADMIN_ADDRESS);
+    } else {
+      keypair = Ed25519Keypair.fromSecretKey(fromBase64(privateKey));
+    }
+
+    // Create approval transaction: Create IssuerCap and transfer 5 SUI
+    const tx = new Transaction();
+
+    console.log(
+      "📝 Creating IssuerCap and transferring 5 SUI for application:",
+      application.id
     );
+
+    // 1. Create approved IssuerCap directly for the issuer
+    tx.moveCall({
+      target: `${packageId}::issuer::admin_create_approved_issuer`,
+      arguments: [
+        tx.object(adminCapId),
+        tx.pure.address(application.userAddress),
+        tx.pure.string(application.organizationName || "Unknown Organization"),
+        tx.pure.string(application.contactEmail || "unknown@example.com"),
+        tx.pure.string(application.organizationName || "Unknown Organization"),
+        tx.object(process.env.ISSUER_REGISTRY! as string),
+      ],
+    });
+
+    console.log(
+      `✅ Creating approved IssuerCap for: ${application.userAddress}`
+    );
+
+    // 2. Transfer 1 SUI to the new issuer (reduced for testing due to admin balance)
+    if (application.userAddress) {
+      const gasAmount = 1000000000; // 1 SUI worth of gas (1B MIST) - reduced for testing
+
+      // Split 1 SUI and transfer to issuer
+      const [splitCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(gasAmount)]);
+
+      tx.transferObjects([splitCoin], tx.pure.address(application.userAddress));
+
+      console.log(
+        `💰 Transferring 1 SUI (${gasAmount} MIST) to issuer: ${application.userAddress} [TEST MODE]`
+      );
+    } else {
+      console.log("⚠️ No user address found, cannot transfer gas");
+      return NextResponse.json({
+        success: false,
+        error: "User address is required for gas transfer",
+      });
+    }
+
+    // Check admin wallet balance before executing transaction
+    const adminAddress =
+      process.env.ADMIN_ADDRESS || process.env.ADMIN_WALLET_ADDRESS!;
+    const adminBalance = await client.getBalance({
+      owner: adminAddress,
+      coinType: "0x2::sui::SUI",
+    });
+
+    const requiredAmount = 1100000000; // 1.1 SUI (1 SUI + buffer for gas fees)
+    console.log(
+      `💰 Admin balance: ${adminBalance.totalBalance} MIST (need ${requiredAmount} MIST)`
+    );
+
+    if (parseInt(adminBalance.totalBalance) < requiredAmount) {
+      return NextResponse.json({
+        success: false,
+        error: `Insufficient admin balance: has ${(
+          parseInt(adminBalance.totalBalance) / 1000000000
+        ).toFixed(2)} SUI, needs ${(requiredAmount / 1000000000).toFixed(
+          1
+        )} SUI`,
+      });
+    }
+
+    // Sign and execute the combined transaction
+    const result = await client.signAndExecuteTransaction({
+      signer: keypair,
+      transaction: tx,
+      options: {
+        showEffects: true,
+        showObjectChanges: true,
+      },
+    });
+
+    console.log("📊 Transaction result:", {
+      digest: result.digest,
+      status: result.effects?.status?.status,
+      objectChangesCount: result.objectChanges?.length || 0,
+    });
+
+    if (result.effects?.status?.status === "success") {
+      // Get the created IssuerCap ID from transaction results
+      let createdIssuerCapId: string | null = null;
+      if (result.objectChanges) {
+        const issuerCapObject = result.objectChanges.find(
+          (change) =>
+            change.type === "created" &&
+            "objectType" in change &&
+            change.objectType?.includes("issuer::IssuerCap")
+        );
+        if (issuerCapObject && "objectId" in issuerCapObject) {
+          createdIssuerCapId = issuerCapObject.objectId;
+        }
+      }
+
+      if (!createdIssuerCapId) {
+        throw new Error("Failed to get created IssuerCap ID");
+      }
+
+      console.log("✅ Created IssuerCap:", createdIssuerCapId);
+      console.log("✅ Transferred 5 SUI to issuer");
+
+      // Update application status to approved
+      const updateData = {
+        status: "approved" as const,
+        approvedAt: new Date(),
+        reviewedAt: new Date(),
+        reviewedBy: application.applicant,
+        transactionDigest: result.digest,
+      };
+
+      await db
+        .update(issuerApplication)
+        .set(updateData)
+        .where(eq(issuerApplication.id, application.id));
+
+      // Create issuer record with the blockchain IssuerCap ID
+      let userId = application.applicant;
+      if (!userId || typeof userId !== "string" || userId.length !== 36) {
+        // Try to find user by wallet address
+        if (application.userAddress) {
+          const userByWallet = await db.query.users.findFirst({
+            where: eq(users.userAddress, application.userAddress),
+          });
+          if (userByWallet) {
+            userId = userByWallet.id;
+          }
+        }
+      }
+
+      // Check if issuer record already exists for this user
+      const existingIssuer = await db
+        .select()
+        .from(issuers)
+        .where(eq(issuers.userId, userId))
+        .limit(1);
+
+      if (existingIssuer.length === 0) {
+        await db.insert(issuers).values({
+          issuerKey: createdIssuerCapId, // Store the blockchain IssuerCap ID
+          name: application.organizationName,
+          displayName: application.organizationName,
+          website: application.website,
+          userId,
+          isActive: true,
+          isVerified: true,
+          verifiedAt: new Date(),
+        });
+        console.log(
+          "✅ Created issuer record for user:",
+          userId,
+          "with issuerKey:",
+          createdIssuerCapId
+        );
+      } else {
+        console.log("ℹ️ Issuer record already exists for user:", userId);
+      }
+
+      // Update user role to issuer
+      await db
+        .update(users)
+        .set({ role: "issuer" })
+        .where(eq(users.id, userId));
+      console.log("✅ Updated user role to 'issuer' for user ID:", userId);
+
+      return NextResponse.json({
+        success: true,
+        transactionDigest: result.digest,
+        issuerCapId: createdIssuerCapId,
+        message: "Issuer approved successfully with 5 SUI gas sponsorship",
+      });
+    } else {
+      console.error("❌ Transaction failed:", {
+        status: result.effects?.status,
+        errors: result.effects?.status?.error,
+      });
+      throw new Error(
+        `Transaction failed: ${
+          result.effects?.status?.error || "Unknown error"
+        }`
+      );
+    }
+  } catch (error) {
+    console.error("Approve issuer error:", error);
+    return NextResponse.json({
+      success: false,
+      error: `Failed to approve issuer: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`,
+    });
   }
 }

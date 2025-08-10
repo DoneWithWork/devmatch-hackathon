@@ -31,7 +31,6 @@ export async function POST() {
       packageId: process.env.PACKAGE_ID,
       certificateRegistry: process.env.CERTIFICATE_REGISTRY,
       issuerRegistry: process.env.ISSUER_REGISTRY,
-      issuerCapId: process.env.SUI_ISSUER_CAP,
       walletAddress: process.env.SUI_ADDRESS,
       network: process.env.NETWORK || "devnet",
     };

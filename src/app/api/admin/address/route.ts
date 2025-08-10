@@ -1,18 +1,18 @@
 import { NextResponse } from "next/server";
-import { getAdminAddressFromPrivateKey } from "@/utils/adminUtils";
 
 export async function GET() {
   try {
-    const adminPrivateKey = process.env.ADMIN_PRIVATE_KEY;
+    // Use the fixed admin wallet address from environment
+    const adminAddress = process.env.ADMIN_WALLET_ADDRESS;
 
-    if (!adminPrivateKey) {
+    if (!adminAddress) {
       return NextResponse.json(
-        { error: "Admin private key not configured" },
+        {
+          error: "Admin wallet address not configured in environment variables",
+        },
         { status: 500 }
       );
     }
-
-    const adminAddress = getAdminAddressFromPrivateKey(adminPrivateKey);
 
     return NextResponse.json({
       success: true,

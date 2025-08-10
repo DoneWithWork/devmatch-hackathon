@@ -1,0 +1,149 @@
+import { NextRequest, NextResponse } from "next/server";
+import { SuiClient, getFullnodeUrl } from "@mysten/sui.js/client";
+import { TransactionBlock } from "@mysten/sui.js/transactions";
+import { randomUUID } from "crypto";
+import { Ed25519Keypair } from "@mysten/sui.js/keypairs/ed25519";
+
+const client = new SuiClient({ url: getFullnodeUrl("devnet") });
+const PACKAGE_ID = process.env.PACKAGE_ID!;
+const CERTIFICATE_REGISTRY = process.env.CERTIFICATE_REGISTRY!;
+
+export async function POST(request: NextRequest) {
+  try {
+    const {
+      certificateId,
+      userAddress,
+      gasBudget = 6000000,
+    } = await request.json();
+
+    // Get certificate details from your database
+    const certificateData = await getCertificateFromDB(certificateId);
+
+    if (!certificateData) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Certificate not found",
+        },
+        { status: 404 }
+      );
+    }
+
+    // Load issuer keypair for sponsored transaction
+    const issuerPrivateKey = process.env.ISSUER_PRIVATE_KEY!;
+    const issuerKeypair = Ed25519Keypair.fromSecretKey(
+      Buffer.from(issuerPrivateKey, "hex")
+    );
+
+    console.log(
+      "💰 Minting certificate with sponsored transaction (6M MIST budget)"
+    );
+
+    const tx = new TransactionBlock();
+
+    // Convert field data to proper format
+    const fieldNames = Object.keys(certificateData.fieldData);
+    const fieldValues = Object.values(certificateData.fieldData);
+
+    const fieldNamesBytes = fieldNames.map((name) =>
+      Array.from(new TextEncoder().encode(name))
+    );
+    const fieldValuesBytes = fieldValues.map((value) =>
+      Array.from(new TextEncoder().encode(String(value)))
+    );
+
+    // Issue certificate on-chain (issuer pays gas, user gets ownership)
+    const clientProvidedId = randomUUID();
+    const clientProvidedIdBytes = Array.from(
+      new TextEncoder().encode(clientProvidedId)
+    );
+
+    tx.moveCall({
+      target: `${PACKAGE_ID}::certificate::issue_certificate`,
+      arguments: [
+        tx.object(certificateData.templateId),
+        tx.pure(userAddress), // User becomes the owner
+        tx.pure(fieldNamesBytes),
+        tx.pure(fieldValuesBytes),
+        tx.pure([]), // No expiry
+        tx.pure(clientProvidedIdBytes),
+        tx.object(CERTIFICATE_REGISTRY),
+      ],
+    });
+
+    // Sponsored transaction: Issuer pays gas, user gets certificate
+    tx.setGasBudget(gasBudget);
+
+    const result = await client.signAndExecuteTransactionBlock({
+      signer: issuerKeypair, // Issuer signs and pays
+      transactionBlock: tx,
+      options: {
+        showEffects: true,
+        showObjectChanges: true,
+        showEvents: true,
+      },
+    });
+
+    // Find the created certificate object
+    const createdCert = result.objectChanges?.find(
+      (change) =>
+        change.type === "created" &&
+        change.objectType?.includes("::certificate::Certificate")
+    );
+
+    if (createdCert && createdCert.type === "created") {
+      // Update database to mark as minted
+      await updateCertificateStatusInDB(
+        certificateId,
+        "minted",
+        createdCert.objectId
+      );
+
+      return NextResponse.json({
+        success: true,
+        transactionDigest: result.digest,
+        certificateId: createdCert.objectId,
+        gasUsed: result.effects?.gasUsed,
+        message: "Certificate minted successfully via sponsored transaction",
+      });
+    } else {
+      throw new Error("Certificate creation failed");
+    }
+  } catch (error) {
+    console.error("Certificate minting failed:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 }
+    );
+  }
+}
+
+// Helper functions for database operations
+async function getCertificateFromDB(certificateId: string) {
+  // TODO: Implement database lookup
+  // Return certificate data including templateId, fieldData
+  return {
+    id: certificateId,
+    templateId: "YOUR_TEMPLATE_ID",
+    fieldData: {
+      "Student Name": "John Doe",
+      "Course Title": "Blockchain Development",
+      Grade: "A+",
+      "Completion Date": "2025-01-08",
+    },
+  };
+}
+
+async function updateCertificateStatusInDB(
+  certificateId: string,
+  status: string,
+  onChainId?: string
+) {
+  // TODO: Implement database update
+  console.log(
+    `Updated certificate ${certificateId} to ${status}, on-chain ID: ${onChainId}`
+  );
+}
